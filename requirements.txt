@@ -1,0 +1,5 @@
+scikit-learn>=1.6      # FrozenEstimator; cv="prefit" was removed in 1.8
+numpy>=1.26
+pandas>=2.0
+streamlit>=1.30
+pytest>=7.0
