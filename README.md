@@ -130,7 +130,7 @@ python -m pytest tests -q
   attributions approximate instead of exact. The contribution chart in the UI
   is the model's actual arithmetic, not a post-hoc explanation of it.
 - The conformal guarantee is *marginal*, not conditional (Angelopoulos & Bates,
-  2021): it holds across the population, not necessarily within every subgroup.
+  2023): it holds across the population, not necessarily within every subgroup.
   Subgroup-conditional coverage is the obvious next step and is not implemented.
 
 ## References
@@ -144,7 +144,7 @@ Each method traces to a published source. Full strings are in
 | Guo et al. (2017) | Why we report AUC *and* Brier/ECE — calibration ≠ accuracy |
 | Lee et al. (2018) | Class-conditional Mahalanobis OOD score in `ood.py` |
 | Sadinle, Lei & Wasserman (2019) | LAC/THR set-valued classifier in `conformal.py` |
-| Angelopoulos & Bates (2021) | Split conformal prediction, finite-sample correction, marginal coverage |
+| Angelopoulos & Bates (2023) | Split conformal prediction, finite-sample correction, marginal coverage |
 
 ## Data
 

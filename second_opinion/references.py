@@ -32,10 +32,19 @@ REFERENCES: dict[str, str] = {
         "doi:10.1080/01621459.2017.1395341"
     ),
     "angelopoulos2021": (
-        "Angelopoulos, A.N., & Bates, S. (2021). A gentle introduction to "
-        "conformal prediction and distribution-free uncertainty quantification. "
-        "Foundations and Trends in Machine Learning, 4(1-2), 1-210. "
-        "arXiv:2107.07511"
+        # Two versions exist and they are easy to conflate. The 2021 arXiv
+        # preprint is "A Gentle Introduction to Conformal Prediction and
+        # Distribution-Free Uncertainty Quantification"; the journal version is
+        # "Conformal Prediction: A Gentle Introduction", Foundations and Trends
+        # in Machine Learning 16(4), 494-591, in 2023. An earlier draft of this
+        # file cited the preprint's year and title against a volume/page range
+        # that belongs to neither ("4(1-2), 1-210"). The journal version is
+        # cited here; the preprint arXiv ID is kept because it is the copy most
+        # readers will actually open.
+        "Angelopoulos, A.N., & Bates, S. (2023). Conformal prediction: a gentle "
+        "introduction. Foundations and Trends in Machine Learning, 16(4), "
+        "494-591. doi:10.1561/2200000101 "
+        "(preprint: arXiv:2107.07511, 2021)"
     ),
 }
 

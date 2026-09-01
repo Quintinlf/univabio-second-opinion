@@ -27,7 +27,7 @@ empirical quantile of those scores on a held-out set, then include every
 label whose probability clears `1 - qhat`.
 
 Split conformal prediction with the finite-sample correction follows
-Angelopoulos & Bates (2021). The guarantee is *marginal*: coverage holds
+Angelopoulos & Bates (2023). The guarantee is *marginal*: coverage holds
 on average over the population, not necessarily within every subgroup.
 
 Measured on WDBC over 25 random splits at alpha=0.10: 94.0% coverage, 95% of
