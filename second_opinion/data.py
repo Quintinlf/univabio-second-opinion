@@ -11,10 +11,19 @@ Wisconsin Diagnostic Breast Cancer (WDBC). Street, Wolberg & Mangasarian
 with scikit-learn as `load_breast_cancer`, originally from the UCI Machine
 Learning Repository.
 
-569 fine-needle-aspirate samples, 30 features: the mean, standard error, and
-"worst" (mean of the three largest) value of ten nuclear measurements —
-radius, texture, perimeter, area, smoothness, compactness, concavity,
-concave points, symmetry, fractal dimension.
+Upstream pipeline (Street et al., 1993)
+---------------------------------------
+This repo starts *after* image processing. The original system digitised
+fine-needle-aspirate slides, segmented individual nuclei with active-contour
+models ("snakes"), and computed ten geometric/textural measurements per
+nucleus. The 30 columns here are the mean, standard error, and "worst"
+(mean of the three largest) of those ten features across all nuclei in each
+sample. Raw slide images are not bundled with WDBC — only these extracted
+numbers — so any upstream denoising or segmentation is assumed already done.
+
+569 fine-needle-aspirate samples, 30 features: radius, texture, perimeter,
+area, smoothness, compactness, concavity, concave points, symmetry, fractal
+dimension (each as mean, SE, and worst).
 
 A note on the label direction
 -----------------------------
@@ -32,12 +41,9 @@ from dataclasses import dataclass
 import numpy as np
 from sklearn.datasets import load_breast_cancer
 
-CITATION = (
-    "Street, W.N., Wolberg, W.H., & Mangasarian, O.L. (1993). Nuclear feature "
-    "extraction for breast tumor diagnosis. IS&T/SPIE International Symposium "
-    "on Electronic Imaging: Science and Technology, 1905, 861-870. "
-    "UCI Machine Learning Repository (Wisconsin Diagnostic Breast Cancer)."
-)
+from second_opinion.references import REFERENCES
+
+CITATION = REFERENCES["street1993"]
 
 MALIGNANT = 1
 BENIGN = 0

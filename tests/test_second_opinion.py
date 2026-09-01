@@ -15,7 +15,9 @@ from second_opinion.conformal import (
     ABSTAIN, AMBIGUOUS, DECISIVE, calibrate, coverage, predict_set,
 )
 from second_opinion.data import BENIGN, MALIGNANT, load
+from second_opinion.model import expected_calibration_error
 from second_opinion.ood import NoveltyDetector
+from second_opinion.references import REFERENCES, REFERENCES_BIBLIOGRAPHY
 
 
 @pytest.fixture(scope="module")
@@ -124,6 +126,14 @@ def test_novelty_detector_requires_fitting():
         NoveltyDetector().score(np.zeros((1, 30)))
 
 
+def test_novelty_detector_requires_both_classes():
+    data = load()
+    X_mal = data.X[data.y == MALIGNANT]
+    y_mal = data.y[data.y == MALIGNANT]
+    with pytest.raises(ValueError, match="no training samples"):
+        NoveltyDetector().fit(X_mal, y_mal)
+
+
 # ── the assembled model ────────────────────────────────────────────────────────
 
 def test_assessment_withholds_trust_on_an_outlier(model):
@@ -179,3 +189,28 @@ def test_calibration_does_not_wreck_ranking(model):
 def test_unfitted_model_refuses_to_predict():
     with pytest.raises(RuntimeError):
         SecondOpinion().assess(np.zeros(30))
+
+
+def test_references_include_all_load_bearing_papers():
+    expected = {
+        "street1993": ("Street", "1993"),
+        "guo2017": ("Guo", "2017"),
+        "lee2018": ("Lee", "2018"),
+        "sadinle2019": ("Sadinle", "2019"),
+        "angelopoulos2021": ("Angelopoulos", "2021"),
+    }
+    for key, (author, year) in expected.items():
+        assert key in REFERENCES
+        assert author in REFERENCES[key]
+        assert year in REFERENCES[key]
+    assert len(REFERENCES_BIBLIOGRAPHY) == len(expected)
+
+
+def test_ece_computed_and_calibrated(model):
+    """Guo et al.: calibration and accuracy are different quantities."""
+    m = model.metrics
+    assert m.ece_uncalibrated >= 0
+    assert m.ece_calibrated >= 0
+    assert expected_calibration_error(
+        model.base.predict_proba(model.data.X)[:, 1], model.data.y
+    ) >= 0

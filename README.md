@@ -56,10 +56,11 @@ Across **40 random splits**, mean ± sd:
 |---|---|
 | AUC (uncalibrated → calibrated) | 0.994 → 0.985 ± 0.012 |
 | Brier (uncalibrated → calibrated) | 0.022 → 0.025 ± 0.011 |
+| ECE (uncalibrated → calibrated) | see `evaluate.py` |
 | **Conformal coverage** (target 90%) | **93.5% ± 3.5%** |
 | — decisive, one label | 95.0% |
 | — abstained, no label | 5.0% |
-| Novelty-flagged, genuine held-out samples | 3.4% |
+| Novelty-flagged, genuine held-out samples | 6.8% |
 | Novelty-flagged, deliberately scrambled inputs | **100%** |
 
 Coverage on any *single* split ranges from 86% to 99%. The headline figures
@@ -72,9 +73,10 @@ python scripts/evaluate.py
 ```
 
 **On the calibration trade:** isotonic calibration costs ~0.009 AUC and buys a
-better Brier score and higher conformal coverage than Platt scaling (measured:
-93.5% vs 91.2% coverage, 4.9% vs 7.8% abstention). Ranking matters less here
-than whether the probability means what it says.
+better Brier score, lower ECE, and higher conformal coverage than Platt scaling
+(measured: 93.5% vs 91.2% coverage, 4.9% vs 7.8% abstention). Ranking matters
+less here than whether the probability means what it says — the point of Guo
+et al. (2017): accuracy and calibration are different quantities.
 
 ## Try it
 
@@ -100,7 +102,8 @@ second_opinion/
   data.py        dataset + provenance; flips sklearn's label direction
   model.py       the three-part assessment, and the train/cal/test split
   conformal.py   split conformal prediction (LAC), coverage guarantee
-  ood.py         Mahalanobis novelty detection
+  ood.py         class-conditional Mahalanobis novelty detection
+  references.py  bibliography for all load-bearing methods
 scripts/
   evaluate.py    the 40-split evaluation behind every number above
 tests/           18 tests, one per claim made here or in the UI
@@ -119,14 +122,29 @@ python -m pytest tests -q
   1990s. Nothing here has been shown to transfer anywhere else.
 - It classifies **pre-extracted nuclear measurements**, not images. The hard
   clinical problem — getting from a slide to those 30 numbers — is assumed
-  already solved, and it is the part that would actually break in the field.
+  already solved (Street et al., 1993: digitised FNA → snake segmentation →
+  ten nuclear features → mean/SE/worst). Raw slide images are not bundled
+  with WDBC, so upstream denoising or segmentation is out of scope here.
 - Logistic regression was chosen over a stronger model deliberately: at
   n=569 a gradient-boosted ensemble buys little AUC and makes the feature
   attributions approximate instead of exact. The contribution chart in the UI
   is the model's actual arithmetic, not a post-hoc explanation of it.
-- The conformal guarantee is *marginal*, not conditional: it holds across the
-  population, not necessarily within every subgroup. Subgroup-conditional
-  coverage is the obvious next step and is not implemented.
+- The conformal guarantee is *marginal*, not conditional (Angelopoulos & Bates,
+  2021): it holds across the population, not necessarily within every subgroup.
+  Subgroup-conditional coverage is the obvious next step and is not implemented.
+
+## References
+
+Each method traces to a published source. Full strings are in
+`second_opinion/references.py`.
+
+| Paper | Role here |
+|---|---|
+| Street, Wolberg & Mangasarian (1993) | WDBC dataset; upstream snake-segmentation feature extraction |
+| Guo et al. (2017) | Why we report AUC *and* Brier/ECE — calibration ≠ accuracy |
+| Lee et al. (2018) | Class-conditional Mahalanobis OOD score in `ood.py` |
+| Sadinle, Lei & Wasserman (2019) | LAC/THR set-valued classifier in `conformal.py` |
+| Angelopoulos & Bates (2021) | Split conformal prediction, finite-sample correction, marginal coverage |
 
 ## Data
 

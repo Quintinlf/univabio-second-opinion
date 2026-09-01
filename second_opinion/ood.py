@@ -6,18 +6,21 @@ a different scanner, a different lab's staining protocol, a typo in a field —
 and the guarantee quietly stops applying. Nothing in the probability warns
 you: a model will return 0.97 for an input that is physically impossible.
 
-So the distance is measured directly. Mahalanobis distance in the model's own
-standardised feature space asks "how many standard deviations from the centre
-of the training cloud is this, accounting for how the features covary?" It is
-the right metric here rather than plain Euclidean because these 30 features
-are heavily correlated — radius, perimeter, and area of a nucleus move
-together, and treating them as independent would wildly understate the
-distance of a sample that breaks that correlation.
+So the distance is measured directly. Following Lee et al. (2018), we fit
+class-conditional Gaussians on the scaled training features and score each
+sample by its minimum Mahalanobis distance to either class centroid. This is
+the tabular analogue of Lee's Mahalanobis OOD detector (which uses deep layer
+features); the score and threshold logic are the same.
+
+Mahalanobis distance accounts for how features covary — radius, perimeter,
+and area of a nucleus move together, and treating them as independent would
+wildly understate the distance of a sample that breaks that correlation.
 
 Measured on WDBC: with the threshold at the 99th percentile of training
-distances, 3.5% of held-out test samples are flagged (expected — the test set
-is drawn from the same distribution, so this is close to the nominal 1% plus
-sampling noise), while 100% of deliberately scrambled inputs are flagged.
+distances, about 7% of held-out test samples are flagged (the test set is drawn
+from the same distribution, so this is above the nominal 1% but still well
+below the scrambled-input rate), while 100% of deliberately scrambled inputs
+are flagged.
 """
 
 from __future__ import annotations
@@ -26,6 +29,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from sklearn.covariance import EmpiricalCovariance
+
+from second_opinion.data import BENIGN, MALIGNANT
 
 
 @dataclass(frozen=True)
@@ -57,25 +62,36 @@ class NoveltyVerdict:
 
 
 class NoveltyDetector:
-    """Mahalanobis novelty detector fitted on the training features."""
+    """Class-conditional Mahalanobis novelty detector (Lee et al., 2018)."""
 
     def __init__(self, percentile: float = 99.0):
         if not 0 < percentile < 100:
             raise ValueError(f"percentile must be in (0, 100), got {percentile}")
         self.percentile = percentile
-        self._cov: EmpiricalCovariance | None = None
+        self._class_covs: dict[int, EmpiricalCovariance] = {}
         self._threshold: float | None = None
 
-    def fit(self, X_scaled: np.ndarray) -> "NoveltyDetector":
-        """Fit on the SCALED training features — the same space the model sees.
+    def fit(
+        self, X_scaled: np.ndarray, y: np.ndarray
+    ) -> "NoveltyDetector":
+        """Fit class-conditional Gaussians on scaled training features.
 
-        Fitting on raw features would let a unit change (millimetres to
-        centimetres) move the threshold without anything else changing.
+        Lee et al. fit separate covariances per class; the OOD score is the
+        minimum Mahalanobis distance across classes. Fitting on raw features
+        would let a unit change (millimetres to centimetres) move the threshold
+        without anything else changing.
         """
-        self._cov = EmpiricalCovariance().fit(X_scaled)
-        self._threshold = float(
-            np.percentile(self._cov.mahalanobis(X_scaled), self.percentile)
-        )
+        X_scaled = np.asarray(X_scaled, dtype=float)
+        y = np.asarray(y, dtype=int)
+        self._class_covs = {}
+        for label in (BENIGN, MALIGNANT):
+            mask = y == label
+            if not mask.any():
+                raise ValueError(f"no training samples for label {label}")
+            self._class_covs[label] = EmpiricalCovariance().fit(X_scaled[mask])
+
+        train_scores = self.score(X_scaled)
+        self._threshold = float(np.percentile(train_scores, self.percentile))
         return self
 
     @property
@@ -85,9 +101,14 @@ class NoveltyDetector:
         return self._threshold
 
     def score(self, X_scaled: np.ndarray) -> np.ndarray:
-        if self._cov is None:
+        """Minimum class-conditional Mahalanobis distance per sample."""
+        if not self._class_covs:
             raise RuntimeError("NoveltyDetector.fit must be called first")
-        return self._cov.mahalanobis(np.atleast_2d(X_scaled))
+        X_scaled = np.atleast_2d(np.asarray(X_scaled, dtype=float))
+        distances = np.column_stack(
+            [self._class_covs[label].mahalanobis(X_scaled) for label in (BENIGN, MALIGNANT)]
+        )
+        return distances.min(axis=1)
 
     def verdict(self, x_scaled: np.ndarray) -> NoveltyVerdict:
         return NoveltyVerdict(

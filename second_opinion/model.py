@@ -15,6 +15,13 @@ guaranteed *in distribution* and silently voids on a distribution shift.
 Novelty detection catches the shift but says nothing about the diagnosis.
 Reporting all three is the product.
 
+Calibration follows Guo et al. (2017): high accuracy does not imply
+calibration. We report AUC alongside Brier and expected calibration error
+(ECE) to make that trade visible. Isotonic regression (not Guo's temperature
+scaling) is used because this is logistic regression on tabular features, not
+a deep network — but the point is the same: a model can rank well and still
+misstate its probabilities.
+
 The data is split three ways, not two: train / calibration / test. The
 calibration split does double duty (isotonic calibration and the conformal
 quantile) and is never trained on; the test split is touched only when
@@ -41,6 +48,28 @@ from second_opinion.ood import NoveltyDetector, NoveltyVerdict
 
 DEFAULT_ALPHA = 0.10
 DEFAULT_SEED = 0
+ECE_BINS = 10
+
+
+def expected_calibration_error(
+    probabilities: np.ndarray, labels: np.ndarray, n_bins: int = ECE_BINS
+) -> float:
+    """Expected calibration error (Guo et al., 2017) with uniform binning."""
+    probabilities = np.asarray(probabilities, dtype=float)
+    labels = np.asarray(labels, dtype=int)
+    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    ece = 0.0
+    for low, high in zip(bin_edges[:-1], bin_edges[1:]):
+        if high == 1.0:
+            mask = (probabilities >= low) & (probabilities <= high)
+        else:
+            mask = (probabilities >= low) & (probabilities < high)
+        if not mask.any():
+            continue
+        bin_acc = labels[mask].mean()
+        bin_conf = probabilities[mask].mean()
+        ece += mask.mean() * abs(bin_acc - bin_conf)
+    return float(ece)
 
 
 @dataclass
@@ -86,6 +115,8 @@ class Metrics:
     auc_calibrated: float
     brier_uncalibrated: float
     brier_calibrated: float
+    ece_uncalibrated: float
+    ece_calibrated: float
     coverage: float
     target_coverage: float
     set_sizes: dict[str, float]
@@ -97,6 +128,7 @@ class Metrics:
             f"  (malignant prevalence {self.prevalence:.1%})\n"
             f"AUC   {self.auc_uncalibrated:.3f} -> {self.auc_calibrated:.3f} after calibration\n"
             f"Brier {self.brier_uncalibrated:.4f} -> {self.brier_calibrated:.4f}\n"
+            f"ECE   {self.ece_uncalibrated:.4f} -> {self.ece_calibrated:.4f}\n"
             f"conformal coverage {self.coverage:.1%} (target {self.target_coverage:.0%})\n"
             f"  decisive {self.set_sizes['decisive']:.1%}"
             f" · ambiguous {self.set_sizes['ambiguous']:.1%}"
@@ -149,7 +181,7 @@ class SecondOpinion:
         self.qhat = conformal.calibrate(p_cal, y_cal, alpha=self.alpha)
 
         scaler = self.base.named_steps["standardscaler"]
-        self.novelty = NoveltyDetector().fit(scaler.transform(X_train))
+        self.novelty = NoveltyDetector().fit(scaler.transform(X_train), y_train)
 
         self.metrics = self._evaluate(X_train, X_cal, X_test, y_test)
         return self
@@ -171,6 +203,8 @@ class SecondOpinion:
             auc_calibrated=float(roc_auc_score(y_test, p_test[:, 1])),
             brier_uncalibrated=float(brier_score_loss(y_test, raw)),
             brier_calibrated=float(brier_score_loss(y_test, p_test[:, 1])),
+            ece_uncalibrated=expected_calibration_error(raw, y_test),
+            ece_calibrated=expected_calibration_error(p_test[:, 1], y_test),
             coverage=conformal.coverage(p_test, y_test, self.qhat),
             target_coverage=1 - self.alpha,
             set_sizes=conformal.set_size_distribution(p_test, self.qhat),

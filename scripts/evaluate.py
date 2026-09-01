@@ -24,6 +24,7 @@ warnings.filterwarnings("ignore")
 
 from second_opinion import SecondOpinion  # noqa: E402
 from second_opinion.data import CITATION, load  # noqa: E402
+from second_opinion.references import REFERENCES_BIBLIOGRAPHY  # noqa: E402
 
 N_SEEDS = 40
 
@@ -40,6 +41,7 @@ def main() -> int:
         rows.append([
             m.auc_uncalibrated, m.auc_calibrated,
             m.brier_uncalibrated, m.brier_calibrated,
+            m.ece_uncalibrated, m.ece_calibrated,
             m.coverage, m.set_sizes["decisive"], m.set_sizes["ambiguous"],
             m.set_sizes["abstain"], m.novelty_flagged_test,
         ])
@@ -48,6 +50,7 @@ def main() -> int:
     names = [
         "AUC (uncalibrated)", "AUC (calibrated)",
         "Brier (uncalibrated)", "Brier (calibrated)",
+        "ECE (uncalibrated)", "ECE (calibrated)",
         "Conformal coverage", "  decisive (1 label)", "  ambiguous (2 labels)",
         "  abstained (0 labels)", "Novelty-flagged (test)",
     ]
@@ -58,7 +61,7 @@ def main() -> int:
     print(f"\nTarget coverage was {1 - SecondOpinion().alpha:.0%}. "
           "Split conformal is conservative by construction, so running above "
           "target is expected and is the safe direction.")
-    print(f"Coverage range over seeds: {arr[:, 4].min():.1%} to {arr[:, 4].max():.1%} "
+    print(f"Coverage range over seeds: {arr[:, 6].min():.1%} to {arr[:, 6].max():.1%} "
           "— which is why no single split is quoted as the result.")
 
     # The novelty detector has to be shown to actually detect something, or it
@@ -69,7 +72,11 @@ def main() -> int:
     junk = data.X[rng.integers(0, len(data), 200)] * rng.uniform(2.5, 4.0, (200, data.X.shape[1]))
     flagged = (model.novelty.score(scaler.transform(junk)) > model.novelty.threshold).mean()
     print(f"\nNovelty check: {flagged:.0%} of 200 scrambled inputs flagged "
-          f"(vs {mean[8]:.1%} of genuine held-out samples).")
+          f"(vs {mean[10]:.1%} of genuine held-out samples).")
+
+    print("\nReferences:")
+    for ref in REFERENCES_BIBLIOGRAPHY:
+        print(f"  {ref}")
     return 0
 
 

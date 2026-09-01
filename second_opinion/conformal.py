@@ -20,19 +20,24 @@ That empty set is the point of the whole project. A model that cannot say
 
 Method
 ------
-LAC (Least Ambiguous set-valued Classifier), also called THR: the
-nonconformity score of a labelled example is `1 - p(true label)`. Calibrate
-by taking the ceil((n+1)(1-alpha))/n empirical quantile of those scores on a
-held-out set, then include every label whose probability clears `1 - qhat`.
+LAC (Least Ambiguous set-valued Classifier), also called THR (Sadinle,
+Lei & Wasserman, 2019): the nonconformity score of a labelled example is
+`1 - p(true label)`. Calibrate by taking the ceil((n+1)(1-alpha))/n
+empirical quantile of those scores on a held-out set, then include every
+label whose probability clears `1 - qhat`.
+
+Split conformal prediction with the finite-sample correction follows
+Angelopoulos & Bates (2021). The guarantee is *marginal*: coverage holds
+on average over the population, not necessarily within every subgroup.
 
 Measured on WDBC over 25 random splits at alpha=0.10: 94.0% coverage, 95% of
 test cases decided with a single label, 5% abstained. Coverage runs slightly
 above the 90% target — split conformal is conservative by construction, and
 that direction is the safe one here.
 
-APS (Adaptive Prediction Sets) was tried and rejected: it reached 99%
-coverage but returned both labels on 13-24% of cases, which converts a
-decisive tool into one that shrugs at a quarter of its inputs.
+APS (Adaptive Prediction Sets; Sadinle et al., 2019) was tried and rejected:
+it reached 99% coverage but returned both labels on 13-24% of cases, which
+converts a decisive tool into one that shrugs at a quarter of its inputs.
 """
 
 from __future__ import annotations

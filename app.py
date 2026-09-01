@@ -18,6 +18,7 @@ import streamlit as st
 from second_opinion import SecondOpinion
 from second_opinion.conformal import ABSTAIN, AMBIGUOUS
 from second_opinion.data import CITATION, feature_reference, load
+from second_opinion.references import REFERENCES_BIBLIOGRAPHY
 
 st.set_page_config(page_title="Second Opinion", page_icon="🩺", layout="wide")
 
@@ -204,6 +205,15 @@ with st.expander("Held-out performance (why you should believe any of this)"):
         "averaged rather than taken from whichever split flattered the model. "
         "Regenerate with `python scripts/evaluate.py`.\n\n"
         "The novelty detector flags **100%** of deliberately scrambled inputs "
-        "and **3.4%** of genuine held-out samples."
+        "and **6.8%** of genuine held-out samples."
     )
     st.caption(f"Data: {CITATION}")
+
+with st.expander("Methods & references"):
+    st.markdown(
+        "Each method in this prototype traces to a published source. "
+        "The conformal guarantee is *marginal* (Angelopoulos & Bates, 2021): "
+        "it holds on average, not necessarily within every subgroup."
+    )
+    for ref in REFERENCES_BIBLIOGRAPHY:
+        st.markdown(f"- {ref}")
