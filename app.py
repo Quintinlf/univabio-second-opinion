@@ -152,23 +152,28 @@ with left:
     st.divider()
     st.markdown("#### The three questions, separately")
 
+    # Short labels/values on purpose: st.metric truncates silently rather than
+    # wrapping, and three of them side by side in a 3/5-width column left
+    # "1. Probability malignant" reading "1. Probability malig..." and
+    # "in distribution" reading "in distri...". The full wording lives in the
+    # tooltip (help=), which is not truncated.
     c1, c2, c3 = st.columns(3)
     c1.metric(
-        "1. Probability malignant",
+        "1. Probability",
         f"{assessment.probability_malignant:.1%}",
-        help="Calibrated on held-out data, so 70% means roughly 70 of 100 such "
-             "samples are malignant. On its own this says nothing about "
-             "whether it can be trusted here.",
+        help="Probability malignant, calibrated on held-out data: 70% means "
+             "roughly 70 of 100 such samples are malignant. On its own this "
+             "says nothing about whether it can be trusted here.",
     )
     c2.metric(
-        "2. Conformal verdict",
+        "2. Conformal",
         assessment.prediction_set.verdict,
         help="A prediction set with a coverage guarantee. 'abstain' means no "
              "label is plausible at this confidence level.",
     )
     c3.metric(
         "3. Novelty",
-        "outlier" if assessment.novelty.is_outlier else "in distribution",
+        "outlier" if assessment.novelty.is_outlier else "typical",
         f"{assessment.novelty.ratio:.2f}x threshold",
         delta_color="inverse",
         help="Mahalanobis distance from the training data, relative to the "
@@ -212,7 +217,7 @@ with st.expander("Held-out performance (why you should believe any of this)"):
 with st.expander("Methods & references"):
     st.markdown(
         "Each method in this prototype traces to a published source. "
-        "The conformal guarantee is *marginal* (Angelopoulos & Bates, 2021): "
+        "The conformal guarantee is *marginal* (Angelopoulos & Bates, 2023): "
         "it holds on average, not necessarily within every subgroup."
     )
     for ref in REFERENCES_BIBLIOGRAPHY:
