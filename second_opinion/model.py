@@ -18,9 +18,17 @@ Reporting all three is the product.
 Calibration follows Guo et al. (2017): high accuracy does not imply
 calibration. We report AUC alongside Brier and expected calibration error
 (ECE) to make that trade visible. Isotonic regression (not Guo's temperature
-scaling) is used because this is logistic regression on tabular features, not
-a deep network — but the point is the same: a model can rank well and still
+scaling) is used because this is an additive tabular model, not a deep
+network — but the point is the same: a model can rank well and still
 misstate its probabilities.
+
+The base classifier is plain logistic regression on standardised features.
+A per-feature spline GAM was tried and measured worse on every metric --
+AUC, Brier, ECE, conformal coverage and abstention rate, over 25 seeds (the
+table is in gam.LinearAdditive). At n=569 the extra flexibility is not
+supported by the data and it is calibration that pays, which is the one
+property this project rests on. A GP would bend the same way and also lose
+the exact attributions.
 
 The data is split three ways, not two: train / calibration / test. The
 calibration split does double duty (isotonic calibration and the conformal
@@ -36,14 +44,13 @@ from dataclasses import dataclass, field
 import numpy as np
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.frozen import FrozenEstimator
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from second_opinion import conformal
 from second_opinion.data import Dataset, load
+from second_opinion.gam import LinearAdditive
 from second_opinion.ood import NoveltyDetector, NoveltyVerdict
 
 DEFAULT_ALPHA = 0.10
@@ -144,11 +151,14 @@ class SecondOpinion:
         self.alpha = alpha
         self.seed = seed
         self.data: Dataset | None = None
-        self.base: Pipeline | None = None
+        self.scaler: StandardScaler | None = None
+        self.base: LinearAdditive | None = None
         self.calibrated: CalibratedClassifierCV | None = None
         self.novelty: NoveltyDetector | None = None
         self.qhat: float | None = None
         self.metrics: Metrics | None = None
+        self.X_test: np.ndarray | None = None
+        self.y_test: np.ndarray | None = None
 
     # ── fitting ────────────────────────────────────────────────────────────────
 
@@ -166,9 +176,8 @@ class SecondOpinion:
             X_fit, y_fit, test_size=0.30, stratify=y_fit, random_state=self.seed
         )
 
-        self.base = make_pipeline(
-            StandardScaler(), LogisticRegression(max_iter=5000)
-        ).fit(X_train, y_train)
+        self.scaler = StandardScaler().fit(X_train)
+        self.base = LinearAdditive(random_state=self.seed).fit(X_train, y_train)
 
         # FrozenEstimator, not cv="prefit" — the latter was removed in
         # scikit-learn 1.8. Both mean "calibrate this already-fitted model
@@ -180,8 +189,8 @@ class SecondOpinion:
         p_cal = self.calibrated.predict_proba(X_cal)
         self.qhat = conformal.calibrate(p_cal, y_cal, alpha=self.alpha)
 
-        scaler = self.base.named_steps["standardscaler"]
-        self.novelty = NoveltyDetector().fit(scaler.transform(X_train), y_train)
+        self.novelty = NoveltyDetector().fit(self.scaler.transform(X_train), y_train)
+        self.X_test, self.y_test = X_test, y_test
 
         self.metrics = self._evaluate(X_train, X_cal, X_test, y_test)
         return self
@@ -189,9 +198,8 @@ class SecondOpinion:
     def _evaluate(self, X_train, X_cal, X_test, y_test) -> Metrics:
         raw = self.base.predict_proba(X_test)[:, 1]
         p_test = self.calibrated.predict_proba(X_test)
-        scaler = self.base.named_steps["standardscaler"]
         flagged = (
-            self.novelty.score(scaler.transform(X_test)) > self.novelty.threshold
+            self.novelty.score(self.scaler.transform(X_test)) > self.novelty.threshold
         ).mean()
 
         return Metrics(
@@ -224,31 +232,31 @@ class SecondOpinion:
             )
 
         p = float(self.calibrated.predict_proba(x)[0, 1])
-        scaler = self.base.named_steps["standardscaler"]
         return Assessment(
             probability_malignant=p,
             prediction_set=conformal.predict_set(p, self.qhat, self.alpha),
-            novelty=self.novelty.verdict(scaler.transform(x)),
+            novelty=self.novelty.verdict(self.scaler.transform(x)),
             contributions=self.contributions(x),
         )
+
+    def feature_contributions(self, x: np.ndarray) -> np.ndarray:
+        """Additive term per feature. Plus intercept, these equal the logit."""
+        x = np.asarray(x, dtype=float).reshape(1, -1)
+        return self.base.feature_contributions(x)[0]
 
     def contributions(self, x: np.ndarray, top: int = 6) -> list[tuple[str, float]]:
         """Which features pushed this sample toward malignant, and how hard.
 
-        For a linear model on standardised inputs this is exact, not an
-        approximation: the contribution of feature i is coefficient_i * z_i,
-        and those terms sum to the logit. A SHAP explainer over the same model
-        would compute the same quantity far more slowly and invite the reader
-        to believe it was model-agnostic magic.
+        For an additive GAM this is exact, not an approximation: the
+        contribution of feature i is the spline value f_i(x_i), and those
+        terms plus the intercept sum to the logit. A SHAP explainer over the
+        same model would compute a slower number and invite the reader to
+        believe it was model-agnostic magic.
 
         Reported from the UNCALIBRATED base model, because that is the thing
-        with coefficients. Isotonic calibration is a monotone reshaping of the
-        output and so cannot change the ordering or sign of these terms.
+        with an additive expansion. Isotonic calibration is a monotone
+        reshaping of the output and so cannot change the sign of these terms.
         """
-        x = np.asarray(x, dtype=float).reshape(1, -1)
-        scaler = self.base.named_steps["standardscaler"]
-        z = scaler.transform(x)[0]
-        coefs = self.base.named_steps["logisticregression"].coef_[0]
-        terms = list(zip(self.data.feature_names, coefs * z))
+        terms = list(zip(self.data.feature_names, self.feature_contributions(x)))
         terms.sort(key=lambda t: abs(t[1]), reverse=True)
         return terms[:top]

@@ -54,10 +54,11 @@ class NoveltyVerdict:
                 "confidence level below is meaningful."
             )
         return (
-            f"This sample is {self.ratio:.1f}x beyond the distance at which 99% "
-            "of training data sits. The model has not seen anything like it, so "
-            "its probability is extrapolation, not evidence. Treat any number "
-            "below as unreliable regardless of how confident it looks."
+            f"I am withholding a prediction because this sample is "
+            f"{self.ratio:.1f}x beyond the distance that contains 99% of "
+            "training data. This does not look like the breast-tissue "
+            "measurements the model was calibrated on. The percentage below "
+            "is extrapolation, not evidence."
         )
 
 

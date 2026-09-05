@@ -3,10 +3,8 @@
     streamlit run app.py
 
 The interaction the judges should notice is not "move slider, get number".
-It is that the number disappears when the model has no business giving one.
-Push the sliders somewhere physically implausible and the tool stops
-answering instead of extrapolating confidently, which is the failure mode
-every other demo in this category has.
+It is that the number disappears when the model has no business giving one,
+and that the two withholds come with different, computed next steps.
 """
 
 from __future__ import annotations
@@ -17,21 +15,20 @@ import streamlit as st
 
 from second_opinion import SecondOpinion
 from second_opinion.conformal import ABSTAIN, AMBIGUOUS
-from second_opinion.data import CITATION, feature_reference, load
+from second_opinion.counterfactual import suggest
+from second_opinion.data import (
+    BASE_FEATURES,
+    CITATION,
+    expand_base_features,
+    feature_reference,
+    load,
+    slider_bounds,
+)
+from second_opinion.presets import archetypal_presets
 from second_opinion.references import REFERENCES_BIBLIOGRAPHY
+from second_opinion.shift import evaluate_shift
 
 st.set_page_config(page_title="Second Opinion", page_icon="🩺", layout="wide")
-
-# The ten base measurements. The dataset also carries "... error" and
-# "worst ..." variants of each; those are driven from the base value below
-# rather than given their own sliders, because thirty independent sliders is
-# not an interface, and because moving them independently produces
-# combinations no real cell nucleus could have.
-BASE_FEATURES = [
-    "mean radius", "mean texture", "mean perimeter", "mean area",
-    "mean smoothness", "mean compactness", "mean concavity",
-    "mean concave points", "mean symmetry", "mean fractal dimension",
-]
 
 
 @st.cache_resource
@@ -44,21 +41,33 @@ def get_reference() -> dict:
     return feature_reference()
 
 
+@st.cache_resource
+def get_presets() -> dict[str, np.ndarray]:
+    return archetypal_presets(get_model())
+
+
 @st.cache_data
-def get_examples() -> dict[str, list[float]]:
-    """Three real samples from the dataset, for one-click demoing."""
-    data = load()
-    mal = int(np.where(data.y == 1)[0][0])
-    ben = int(np.where(data.y == 0)[0][0])
+def get_shift_rows() -> dict[str, list[dict]]:
+    model = get_model()
     return {
-        "A real malignant sample": data.X[mal].tolist(),
-        "A real benign sample": data.X[ben].tolist(),
+        "noise": evaluate_shift(model, model.X_test, model.y_test, kind="noise"),
+        "scale": evaluate_shift(model, model.X_test, model.y_test, kind="scale"),
     }
+
+
+def _apply_preset(name: str) -> None:
+    vector = get_presets()[name]
+    names = get_model().data.feature_names
+    start = dict(zip(names, vector))
+    st.session_state.preset_start = start
+    for feat in BASE_FEATURES:
+        st.session_state[f"slider_{feat}"] = float(start[feat])
 
 
 model = get_model()
 reference = get_reference()
 data = load()
+presets = get_presets()
 
 st.title("🩺 Second Opinion")
 st.markdown(
@@ -81,53 +90,52 @@ st.info(
 
 # ── input ──────────────────────────────────────────────────────────────────────
 
+if "preset_start" not in st.session_state:
+    _apply_preset("Dataset median")
+
 with st.sidebar:
     st.header("Sample measurements")
-    preset = st.selectbox(
-        "Start from", ["Dataset median"] + list(get_examples().keys())
+    st.selectbox(
+        "Cell profile",
+        list(presets.keys()),
+        key="preset_select",
+        on_change=lambda: _apply_preset(st.session_state.preset_select),
+        help="Named starting points from real WDBC geometry, not invented "
+             "cell types. Sliders below stay live for fine-tuning.",
     )
     st.caption(
-        "Slider ranges are the true min/max of the dataset. Push a value to an "
-        "extreme to see the novelty detector fire."
+        "The dropdown fills the sliders from a real sample (or the documented "
+        "impossible-geometry demo). Fine-tune from there. Slider ranges are "
+        "the true min/max of the dataset, padded so you can trip novelty."
     )
-
-    examples = get_examples()
-    if preset in examples:
-        start = dict(zip(data.feature_names, examples[preset]))
-    else:
-        start = {n: reference[n]["median"] for n in data.feature_names}
 
     chosen: dict[str, float] = {}
     for name in BASE_FEATURES:
-        ref = reference[name]
-        span = ref["max"] - ref["min"]
+        lo, hi = slider_bounds(name, reference)
+        span = reference[name]["max"] - reference[name]["min"]
+        if f"slider_{name}" not in st.session_state:
+            st.session_state[f"slider_{name}"] = float(
+                st.session_state.preset_start[name]
+            )
         chosen[name] = st.slider(
             name,
-            min_value=float(ref["min"] - span * 0.5),
-            max_value=float(ref["max"] + span * 0.5),
-            value=float(start[name]),
+            min_value=lo,
+            max_value=hi,
             step=float(span / 200),
-            help=f"Dataset range {ref['min']:.3g} to {ref['max']:.3g}",
+            key=f"slider_{name}",
+            help=f"Dataset range {reference[name]['min']:.3g} to "
+                 f"{reference[name]['max']:.3g}",
         )
 
-# Build the full 30-feature vector: the ten sliders, plus the error/worst
-# variants scaled by how far the slider moved from the dataset median. Holding
-# them fixed instead would let a user triple the mean radius while the "worst
-# radius" stayed put — an impossible sample, which the novelty detector would
-# then correctly flag, but for the wrong reason.
-vector = []
-for name in data.feature_names:
-    if name in chosen:
-        vector.append(chosen[name])
-        continue
-    base = name.replace(" error", "").replace("worst ", "mean ")
-    if base in chosen and reference[base]["median"]:
-        ratio = chosen[base] / reference[base]["median"]
-        vector.append(start.get(name, reference[name]["median"]) * ratio)
-    else:
-        vector.append(start.get(name, reference[name]["median"]))
-
-assessment = model.assess(np.array(vector))
+start = st.session_state.preset_start
+vector = expand_base_features(
+    chosen,
+    start=start,
+    reference=reference,
+    feature_names=data.feature_names,
+)
+assessment = model.assess(vector)
+counterfactual = suggest(model, vector)
 
 # ── output ─────────────────────────────────────────────────────────────────────
 
@@ -149,14 +157,17 @@ with left:
         st.success(f"### {assessment.headline()}", icon="✅")
         st.markdown(f"**Why:** {assessment.prediction_set.explain()}")
 
+    if counterfactual is not None:
+        label = (
+            "What to check"
+            if counterfactual.kind == "novelty"
+            else "What would make this decisive"
+        )
+        st.markdown(f"**{label}:** {counterfactual.explanation}")
+
     st.divider()
     st.markdown("#### The three questions, separately")
 
-    # Short labels/values on purpose: st.metric truncates silently rather than
-    # wrapping, and three of them side by side in a 3/5-width column left
-    # "1. Probability malignant" reading "1. Probability malig..." and
-    # "in distribution" reading "in distri...". The full wording lives in the
-    # tooltip (help=), which is not truncated.
     c1, c2, c3 = st.columns(3)
     c1.metric(
         "1. Probability",
@@ -189,8 +200,8 @@ with left:
 with right:
     st.subheader("What drove this")
     st.caption(
-        "Exact contributions to the log-odds — coefficient × standardised "
-        "value — not an approximation. Positive pushes toward malignant."
+        "Exact contributions — coefficient x standardised value — "
+        "not an approximation. Positive pushes toward malignant."
     )
     contrib = pd.DataFrame(
         assessment.contributions, columns=["feature", "contribution"]
@@ -204,8 +215,8 @@ with st.expander("Held-out performance (why you should believe any of this)"):
     st.code(m.summary(), language="text")
     st.markdown(
         "Figures above are for this one fixed split. Across 40 random splits: "
-        "**coverage 93.5% ± 3.5%**, decisive on **95.0%** of cases, abstaining "
-        "on **5.0%**, AUC **0.985**, Brier **0.025**. Coverage on a single "
+        "**coverage 92.1% ± 3.1%**, decisive on **94.2%** of cases, abstaining "
+        "on **5.5%**, AUC **0.980**, Brier **0.036**. Coverage on a single "
         "split ranges from 86% to 99% — which is why the headline numbers are "
         "averaged rather than taken from whichever split flattered the model. "
         "Regenerate with `python scripts/evaluate.py`.\n\n"
@@ -213,6 +224,25 @@ with st.expander("Held-out performance (why you should believe any of this)"):
         "and **6.8%** of genuine held-out samples."
     )
     st.caption(f"Data: {CITATION}")
+
+with st.expander("What happens under measurement noise"):
+    st.markdown(
+        "Held-out samples are progressively corrupted. **Withhold** (novelty "
+        "or a non-decisive conformal set) should rise. **Confident error** — "
+        "decisive, in-distribution, and wrong — should not climb with it."
+    )
+    rows = get_shift_rows()
+    noise = pd.DataFrame(rows["noise"]).set_index("level")[
+        ["withhold", "novelty", "confident_error"]
+    ]
+    noise.index.name = "noise (stdev of training scale)"
+    st.line_chart(noise)
+    scale = pd.DataFrame(rows["scale"]).set_index("level")[
+        ["withhold", "novelty", "confident_error"]
+    ]
+    scale.index.name = "size-feature scale shift"
+    st.caption("Covariate shift on radius / perimeter / area (a different lab).")
+    st.line_chart(scale)
 
 with st.expander("Methods & references"):
     st.markdown(

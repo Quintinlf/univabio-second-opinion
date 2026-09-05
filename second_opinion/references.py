@@ -31,6 +31,10 @@ REFERENCES: dict[str, str] = {
         "American Statistical Association, 114(525), 223-234. "
         "doi:10.1080/01621459.2017.1395341"
     ),
+    "hastie1986": (
+        "Hastie, T., & Tibshirani, R. (1986). Generalized additive models. "
+        "Statistical Science, 1(3), 297-318. doi:10.1214/ss/1177013604"
+    ),
     "angelopoulos2021": (
         # Two versions exist and they are easy to conflate. The 2021 arXiv
         # preprint is "A Gentle Introduction to Conformal Prediction and
@@ -54,5 +58,6 @@ REFERENCES_BIBLIOGRAPHY: list[str] = [
     REFERENCES["guo2017"],
     REFERENCES["lee2018"],
     REFERENCES["sadinle2019"],
+    REFERENCES["hastie1986"],
     REFERENCES["angelopoulos2021"],
 ]

@@ -49,6 +49,18 @@ MALIGNANT = 1
 BENIGN = 0
 LABELS = {MALIGNANT: "malignant", BENIGN: "benign"}
 
+# The ten mean measurements the UI exposes. Error and worst variants are
+# reconstructed from these so the sliders cannot invent a nucleus whose
+# mean radius tripled while worst radius stayed put.
+BASE_FEATURES = [
+    "mean radius", "mean texture", "mean perimeter", "mean area",
+    "mean smoothness", "mean compactness", "mean concavity",
+    "mean concave points", "mean symmetry", "mean fractal dimension",
+]
+
+# Geometric size family: the features a different lab's resolution would scale.
+SIZE_FEATURE_TOKENS = ("radius", "perimeter", "area")
+
 
 @dataclass(frozen=True)
 class Dataset:
@@ -96,3 +108,68 @@ def feature_reference(data: Dataset | None = None) -> dict[str, dict[str, float]
         }
         for name, col in zip(data.feature_names, data.X.T)
     }
+
+
+def base_feature_name(name: str) -> str:
+    """Map an error/worst column back to its mean measurement.
+
+    sklearn's WDBC names are `mean radius`, `radius error`, `worst radius`
+    — not `mean radius error`. Stripping ' error' alone leaves a token that
+    is not a slider name.
+    """
+    if name.startswith("worst "):
+        return "mean " + name[len("worst "):]
+    if name.endswith(" error"):
+        return "mean " + name[: -len(" error")]
+    return name
+
+
+def slider_bounds(
+    name: str, reference: dict[str, dict[str, float]]
+) -> tuple[float, float]:
+    """Slider range: dataset min/max, padded so a user can trip novelty."""
+    ref = reference[name]
+    span = ref["max"] - ref["min"]
+    return float(ref["min"] - span * 0.5), float(ref["max"] + span * 0.5)
+
+
+def expand_base_features(
+    chosen: dict[str, float],
+    *,
+    start: dict[str, float] | None = None,
+    reference: dict[str, dict[str, float]] | None = None,
+    feature_names: list[str] | None = None,
+) -> np.ndarray:
+    """Rebuild the 30-feature vector from the ten base sliders.
+
+    Error and worst columns scale with how far their mean moved from the
+    dataset median, unless `start` already has a value for that column
+    (a real sample's own error/worst, scaled by the same ratio).
+    """
+    if feature_names is None or reference is None:
+        data = load()
+        feature_names = feature_names or data.feature_names
+        reference = reference or feature_reference(data)
+    if start is None:
+        start = {n: reference[n]["median"] for n in feature_names}
+
+    vector = []
+    for name in feature_names:
+        if name in chosen:
+            vector.append(float(chosen[name]))
+            continue
+        base = base_feature_name(name)
+        base_median = reference[base]["median"]
+        if base in chosen and base_median:
+            ratio = chosen[base] / base_median
+            vector.append(start.get(name, reference[name]["median"]) * ratio)
+        else:
+            vector.append(start.get(name, reference[name]["median"]))
+    return np.asarray(vector, dtype=float)
+
+
+def size_feature_mask(feature_names: list[str]) -> np.ndarray:
+    """True for radius / perimeter / area columns (mean, error, and worst)."""
+    return np.array(
+        [any(token in name for token in SIZE_FEATURE_TOKENS) for name in feature_names]
+    )

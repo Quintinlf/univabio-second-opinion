@@ -89,15 +89,17 @@ class PredictionSet:
         pct = f"{self.confidence:.0%}"
         if self.verdict == ABSTAIN:
             return (
-                f"No call. At the {pct} confidence level neither label is "
-                "plausible for this sample, which usually means it does not "
-                "resemble the training data. Do not read the percentage below "
-                "as a result — escalate to a specialist."
+                f"I am withholding a diagnosis because neither label is "
+                f"plausible at the {pct} confidence level. The probability "
+                "sits between the two conformal thresholds, so the prediction "
+                "set is empty. Do not read the percentage below as a result."
             )
         if self.verdict == AMBIGUOUS:
             return (
-                f"Both labels remain possible at {pct} confidence. This is a "
-                "genuine borderline case, not a model failure. It needs a human."
+                f"I am withholding a single-label diagnosis because this "
+                f"sample sits on the boundary at {pct} confidence. The "
+                "prediction set contains both benign and malignant — a human "
+                "should look."
             )
         label = "MALIGNANT" if self.includes_malignant else "benign"
         return (

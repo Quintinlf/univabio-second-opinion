@@ -25,6 +25,7 @@ warnings.filterwarnings("ignore")
 from second_opinion import SecondOpinion  # noqa: E402
 from second_opinion.data import CITATION, load  # noqa: E402
 from second_opinion.references import REFERENCES_BIBLIOGRAPHY  # noqa: E402
+from second_opinion.shift import evaluate_shift  # noqa: E402
 
 N_SEEDS = 40
 
@@ -62,17 +63,26 @@ def main() -> int:
           "Split conformal is conservative by construction, so running above "
           "target is expected and is the safe direction.")
     print(f"Coverage range over seeds: {arr[:, 6].min():.1%} to {arr[:, 6].max():.1%} "
-          "— which is why no single split is quoted as the result.")
+          "- which is why no single split is quoted as the result.")
 
     # The novelty detector has to be shown to actually detect something, or it
     # is decoration. Scrambled inputs are physically impossible cell nuclei.
     model = SecondOpinion().fit(data)
-    scaler = model.base.named_steps["standardscaler"]
     rng = np.random.default_rng(0)
     junk = data.X[rng.integers(0, len(data), 200)] * rng.uniform(2.5, 4.0, (200, data.X.shape[1]))
-    flagged = (model.novelty.score(scaler.transform(junk)) > model.novelty.threshold).mean()
+    flagged = (model.novelty.score(model.scaler.transform(junk)) > model.novelty.threshold).mean()
     print(f"\nNovelty check: {flagged:.0%} of 200 scrambled inputs flagged "
           f"(vs {mean[10]:.1%} of genuine held-out samples).")
+
+    print("\nShift stress test (seed 0 held-out set):")
+    print("  noise     withhold  novelty  confident_error")
+    for row in evaluate_shift(model, model.X_test, model.y_test, kind="noise"):
+        print(f"  {row['level']:<8.2f}  {row['withhold']:.1%}     "
+              f"{row['novelty']:.1%}     {row['confident_error']:.1%}")
+    print("  scale     withhold  novelty  confident_error")
+    for row in evaluate_shift(model, model.X_test, model.y_test, kind="scale"):
+        print(f"  {row['level']:<8.2f}  {row['withhold']:.1%}     "
+              f"{row['novelty']:.1%}     {row['confident_error']:.1%}")
 
     print("\nReferences:")
     for ref in REFERENCES_BIBLIOGRAPHY:
