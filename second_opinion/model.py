@@ -50,6 +50,7 @@ from sklearn.preprocessing import StandardScaler
 
 from second_opinion import conformal
 from second_opinion.data import Dataset, load
+from second_opinion.diagnostics import format_probability
 from second_opinion.gam import LinearAdditive
 from second_opinion.ood import NoveltyDetector, NoveltyVerdict
 
@@ -107,7 +108,10 @@ class Assessment:
         if self.prediction_set.verdict == conformal.AMBIGUOUS:
             return "Borderline — both labels plausible"
         label = "MALIGNANT" if self.prediction_set.includes_malignant else "Benign"
-        return f"{label} ({self.probability_malignant:.0%} malignant)"
+        # Never round to a bare 0% or 100%. A probability that is merely very
+        # small is not certainty, and printing it as certainty is the exact
+        # overclaim this project exists to avoid.
+        return f"{label} ({format_probability(self.probability_malignant)} malignant)"
 
 
 @dataclass
@@ -233,11 +237,33 @@ class SecondOpinion:
 
         p = float(self.calibrated.predict_proba(x)[0, 1])
         return Assessment(
-            probability_malignant=p,
+            # Reported probability is clipped off 0 and 1; the conformal set is
+            # computed from the raw value so the coverage guarantee is untouched.
+            probability_malignant=self.reportable_probability(p),
             prediction_set=conformal.predict_set(p, self.qhat, self.alpha),
             novelty=self.novelty.verdict(self.scaler.transform(x)),
             contributions=self.contributions(x),
         )
+
+    def reportable_probability(self, p: float) -> float:
+        """Keep the reported probability off the endpoints 0 and 1.
+
+        Isotonic calibration maps each raw score to the frequency observed in
+        its calibration bin, so a bin where every sample happened to be
+        malignant returns exactly 1.0. Printed, that reads as certainty — but
+        it rests on a few dozen calibration points, and "no counterexample in
+        n samples" does not mean "impossible".
+
+        The floor is 1/(2n) over the calibration split: the conventional
+        smallest probability a sample of that size can justify. A model whose
+        whole argument is that its percentages are honest cannot be the one
+        claiming 100%.
+        """
+        n_cal = self.metrics.n_calibration if self.metrics else 0
+        if n_cal <= 0:
+            return float(p)
+        floor = 1.0 / (2.0 * n_cal)
+        return float(min(max(p, floor), 1.0 - floor))
 
     def feature_contributions(self, x: np.ndarray) -> np.ndarray:
         """Additive term per feature. Plus intercept, these equal the logit."""

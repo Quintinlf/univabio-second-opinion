@@ -142,9 +142,14 @@ def expand_base_features(
 ) -> np.ndarray:
     """Rebuild the 30-feature vector from the ten base sliders.
 
-    Error and worst columns scale with how far their mean moved from the
-    dataset median, unless `start` already has a value for that column
-    (a real sample's own error/worst, scaled by the same ratio).
+    Error and worst columns scale with how far their mean moved *from the
+    starting sample's own mean* — not from the dataset median. Anchoring on
+    the median double-counts a real sample's size: a malignant nucleus whose
+    worst radius is already large would have it scaled up again by the ratio
+    of its mean radius to the median, landing the vector off the training
+    manifold and tripping the novelty detector on a textbook sample. With the
+    sample's own value as the anchor, loading a preset unchanged reproduces it
+    exactly (ratio 1.0) and moving a slider scales from where that sample was.
     """
     if feature_names is None or reference is None:
         data = load()
@@ -159,9 +164,9 @@ def expand_base_features(
             vector.append(float(chosen[name]))
             continue
         base = base_feature_name(name)
-        base_median = reference[base]["median"]
-        if base in chosen and base_median:
-            ratio = chosen[base] / base_median
+        anchor = start.get(base) or reference[base]["median"]
+        if base in chosen and anchor:
+            ratio = chosen[base] / anchor
             vector.append(start.get(name, reference[name]["median"]) * ratio)
         else:
             vector.append(start.get(name, reference[name]["median"]))

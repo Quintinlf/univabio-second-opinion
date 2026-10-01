@@ -1,0 +1,143 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Second Opinion — one page</title>
+<style>
+  @page { size: letter; margin: 10mm 11mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font: 7.65pt/1.26 "Source Serif Pro", Georgia, "Times New Roman", serif;
+    color: #15181c; margin: 0;
+  }
+  h1 { font-size: 15.5pt; margin: 0; letter-spacing: -.3pt; font-weight: 700; }
+  .sub { font-size: 8.9pt; font-weight: 600; color: #0b3f66; margin: 1.5pt 0 0; }
+  .meta {
+    font-size: 7.1pt; color: #5d666f; margin: 2.5pt 0 0;
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  .rule { border: 0; border-top: 1.1pt solid #0b3f66; margin: 4pt 0 4.6pt; }
+  h2 {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 7.6pt; text-transform: uppercase; letter-spacing: .5pt;
+    color: #0b3f66; margin: 5.4pt 0 2pt; font-weight: 700;
+  }
+  p { margin: 0 0 3pt; text-align: justify; hyphens: auto; }
+  table { width: 100%; border-collapse: collapse; margin: 2.4pt 0 3.6pt; font-size: 7.1pt; }
+  th, td { text-align: left; padding: 1.7pt 4pt; vertical-align: top; }
+  thead th {
+    font-family: "Segoe UI", system-ui, sans-serif; font-size: 6.9pt;
+    text-transform: uppercase; letter-spacing: .35pt; color: #4a535c;
+    border-bottom: .7pt solid #99a3ad; font-weight: 600;
+  }
+  tbody tr + tr td { border-top: .4pt solid #dde2e7; }
+  td.q { font-weight: 600; width: 29%; }
+  ul { margin: 1.6pt 0 3pt; padding-left: 10pt; }
+  li { margin-bottom: 2.1pt; }
+  code {
+    font-family: Consolas, "Courier New", monospace; font-size: 7.4pt;
+    background: #eef1f4; padding: .4pt 2pt; border-radius: 1.5pt;
+  }
+  .sets {
+    font-family: Consolas, monospace; font-size: 6.9pt; background: #f4f6f8;
+    border-left: 2pt solid #0b3f66; padding: 2.8pt 6pt; margin: 2.4pt 0 3.6pt;
+    line-height: 1.42;
+  }
+  .warn {
+    background: #fdf4e3; border-left: 2pt solid #b5851f; padding: 3.4pt 6pt;
+    margin: 4pt 0 0; font-size: 7.7pt;
+  }
+  .refs { font-size: 7.1pt; color: #4a535c; margin-top: 4.5pt; }
+  strong { font-weight: 700; }
+  .nb { color: #8a1c1c; font-weight: 700; }
+</style>
+
+<h1>Second Opinion</h1>
+<p class="sub">A diagnostic model that reports when it should not be trusted.</p>
+<p class="meta">UnivaBio 2026 — Artificial Intelligence for Human Health &nbsp;·&nbsp; Research prototype, not a medical device &nbsp;·&nbsp; Python, scikit-learn, Streamlit</p>
+<hr class="rule">
+
+<h2>The problem</h2>
+<p>Ask almost any health-AI demo for a prediction and it will give you one. Feed it a patient unlike anyone in its
+training data, a mistyped measurement, or a sample from a different lab, and it <em>still</em> gives you one — with the
+same confident percentage attached. The number carries no signal about whether the model had any business producing it.
+This is a central reason clinical machine learning struggles to deploy: a model validated at one hospital degrades at
+the next, and nothing in its output says so.</p>
+
+<h2>The approach — three questions, not one</h2>
+<p>Second Opinion answers three separate questions about every sample, and withholds the diagnosis when the last two
+say it should.</p>
+<table>
+  <thead><tr><th>Question</th><th>Method</th><th>Why it is not enough alone</th></tr></thead>
+  <tbody>
+    <tr><td class="q">1. What is the probability?</td><td>Isotonic-calibrated logistic regression</td><td>Always answers, even for nonsense</td></tr>
+    <tr><td class="q">2. Is that probability trustworthy <em>for this sample</em>?</td><td>Split conformal prediction (LAC)</td><td>Silently voids under distribution shift</td></tr>
+    <tr><td class="q">3. Is this sample the kind of thing I have seen?</td><td>Class-conditional Mahalanobis novelty detection</td><td>Says nothing about the diagnosis</td></tr>
+  </tbody>
+</table>
+<p>Reporting all three — and gating the headline number on the last two — is the product. The model therefore has
+<strong>four</strong> possible outputs, not two:</p>
+<div class="sets">
+{malignant} / {benign} &nbsp;&nbsp;a decisive call<br>
+{malignant, benign} &nbsp;&nbsp;genuinely borderline — a human should look<br>
+<strong>{} &nbsp;&nbsp;abstain: nothing is plausible; do not read the percentage</strong>
+</div>
+<p>That empty set is the point of the project. A model that cannot say &ldquo;I don&rsquo;t know&rdquo; will hand a
+confident answer to a case it has never seen.</p>
+
+<h2>Key features</h2>
+<ul>
+  <li><strong>A diagnosis that disappears.</strong> When novelty or conformal analysis says no, the headline is a
+  refusal rather than a number. The probability stays on screen, explicitly labelled as transparency, not a result.</li>
+  <li><strong>Two withholds, two computed next steps.</strong> A conformal abstain names the smallest single
+  measurement change that would make the call decisive — <em>&ldquo;if mean concave points drops 37%, this becomes a
+  90%-confident benign.&rdquo;</em> A novelty withhold instead names the measurement that looks like a typo and refuses
+  to speculate past it. Both are computed per sample, not canned text.</li>
+  <li><strong>Catches impossible combinations, not just out-of-range values.</strong> One demo preset sets <em>mean
+  area</em> to its true dataset maximum while <em>radius</em> and <em>perimeter</em> stay at their medians: every value
+  is individually in range, but the geometry is impossible — a nucleus cannot have that area at that radius. Mahalanobis
+  distance flags it because it accounts for how features covary; a per-feature bounds check passes it silently. The base
+  classifier is <span class="nb">100% confident</span> on this input, and the system reports <strong>no
+  diagnosis</strong>.</li>
+  <li><strong>Exact attribution.</strong> The contribution chart is the model&rsquo;s own arithmetic — coefficient ×
+  standardised value, summing exactly to the logit — not a SHAP approximation of it.</li>
+  <li><strong>A stress test shipped in the UI.</strong> Held-out samples are progressively corrupted: the withhold rate
+  climbs to 100% while <em>confident error</em> (decisive, in-distribution, and wrong) does not climb with it. It fails
+  by going quiet instead of by guessing.</li>
+</ul>
+
+<h2>Results</h2>
+<p>Wisconsin Diagnostic Breast Cancer: 569 samples, 30 features, 37.3% malignant; three-way train / calibration / test
+split where calibration is never trained on and test is touched only for these numbers. Averaged over <strong>40 random
+splits</strong> (mean ± sd): AUC <strong>0.985 ± 0.012</strong>, Brier <strong>0.025</strong>, ECE <strong>0.026</strong>
+(improved from 0.032 uncalibrated); <strong>conformal coverage 93.5% ± 3.5%</strong> against a 90% target; decisive on
+<strong>95.1%</strong> of cases, abstaining on <strong>5.0%</strong>. Novelty detection flags <strong>100%</strong> of
+deliberately scrambled inputs versus 6.8% of genuine held-out samples. Single-split coverage ranges from 86% to 99%,
+which is why no single split is quoted as the result. Every figure regenerates with
+<code>python scripts/evaluate.py</code>; <strong>32 claim-level tests</strong> assert each claim made in the README and
+in the UI.</p>
+
+<h2>Who it helps</h2>
+<p><strong>Clinicians and triage workflows</strong> get a refusal they can act on instead of a confident number they
+cannot audit. <strong>Lab and QC staff</strong> get a flagged measurement that reads as a transcription check.
+<strong>Deployment and validation teams</strong> get a built-in monitor for exactly the silent degradation that breaks
+models at a second site. <strong>Patients</strong> are not assigned a number produced by extrapolation.</p>
+
+<h2>Honest limitations — what is finished and what is not</h2>
+<p>This is <strong>not a medical device</strong>: it cannot diagnose anyone, has never been clinically validated, and
+must not inform a real medical decision. The data is 569 samples from one institution collected in the early 1990s,
+with no demonstrated transfer anywhere else. It classifies <strong>pre-extracted nuclear measurements, not images</strong>
+— the hard upstream problem of getting from a slide to those 30 numbers is assumed already solved. The conformal
+guarantee is <em>marginal</em>, not conditional (Angelopoulos &amp; Bates, 2023): it holds across the population, not
+necessarily within every subgroup, and subgroup-conditional coverage is the obvious next step and <strong>is not
+implemented</strong>. A per-feature spline GAM was tried and <strong>reverted</strong> after a 25-seed controlled A/B —
+linear won on all eight metrics (ECE 0.031 vs 0.111) — and is kept in <code>gam.py</code> as the record of what was tried.</p>
+
+<p class="refs"><strong>Methods trace to published sources:</strong> Street, Wolberg &amp; Mangasarian (1993, WDBC and
+upstream feature extraction) · Guo et al. (2017, calibration ≠ accuracy) · Sadinle, Lei &amp; Wasserman (2019, LAC
+set-valued classifier) · Angelopoulos &amp; Bates (2023, split conformal) · Lee et al. (2018, class-conditional
+Mahalanobis OOD) · Hastie &amp; Tibshirani (1986, the additive model measured and not adopted). Full strings in
+<code>second_opinion/references.py</code>.</p>
+
+<div class="warn"><strong>Run it:</strong> <code>pip install -r requirements.txt</code> then
+<code>streamlit run app.py</code> — select <strong>Implausible geometry</strong> in the cell-profile dropdown, or push
+any slider past the dataset range, and watch the diagnosis disappear.</div>

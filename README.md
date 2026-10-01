@@ -85,11 +85,14 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Pick **Implausible geometry** in the cell-profile dropdown, or **push a
-slider past the dataset range**, and watch the diagnosis disappear. The two
-withholds are not the same sentence: a conformal abstain names the slider
-move that would make the set decisive; a novelty withhold names the
-measurement that looks like a typo.
+Pick **Implausible geometry** in the cell-profile dropdown, or open
+**Fine-tune the measurements** and push a slider past the dataset range, and
+watch the diagnosis disappear. The two withholds are not the same sentence: a
+conformal abstain names the measurement change that would make the set
+decisive; a novelty withhold names the measurement that looks like a typo.
+
+Every method is defined in plain English in the app's own glossary, including
+what each one *cannot* tell you on its own.
 
 A subtler demo: the implausible-geometry preset sets *mean area* to its
 true dataset maximum while leaving *mean radius* and *mean perimeter* at
@@ -103,6 +106,7 @@ features covary. A per-feature range check would pass it without comment.
 ```
 second_opinion/
   data.py           dataset + provenance; 10-slider → 30-feature rebuild
+  diagnostics.py    chart data, metric guides, honest probability formatting
   model.py          the three-part assessment, and the train/cal/test split
   gam.py            the linear base model, and the spline GAM it was measured against
   conformal.py      split conformal prediction (LAC), coverage guarantee
@@ -112,14 +116,36 @@ second_opinion/
   shift.py          noise / lab-shift stress test
   references.py     bibliography for all load-bearing methods
 scripts/
-  evaluate.py       40-split numbers + shift table
+  evaluate.py       40-split numbers + shift table (writes split_results.json)
+  capture_cue_cards.py  screenshots the running app for the demo video
 tests/              claim-level tests, one per claim made here or in the UI
 app.py              Streamlit prototype
 ```
 
 ```bash
-python -m pytest tests -q
+python -m pytest tests -q      # 32 claim-level tests
 ```
+
+## Reading the numbers
+
+Every metric in the app ships with its ideal value and a plain-language read
+(`good` / `fair` / `poor`), because a number nobody can judge is decoration.
+
+| Metric | Ideal | What it measures |
+|---|---|---|
+| AUC | 1.000 (0.5 = coin flip) | Ranking: does it put malignant above benign? Says nothing about the percentages. |
+| Brier | 0.000, lower better | Squared error of the probability itself. Punishes confident-and-wrong hardest. |
+| ECE | 0.000, lower better | When it says 70%, how far from 70% is the truth? **The number this project rests on.** |
+| Conformal coverage | at or above the 90% target | How often the true label is inside the prediction set. |
+
+Two things that are easy to misread, and are now explained in the UI:
+
+- **A reported probability is never 0% or 100%.** Isotonic calibration returns
+  the frequency observed in a calibration bin, so a pure bin returns exactly
+  1.0. Printed as "100%" that claims certainty a 128-sample calibration split
+  cannot buy, so the reported value is clipped to 1/(2n) off each end.
+- **Confident error sitting flat at zero is the good outcome**, not a missing
+  line. It counts predictions that were decisive, in-distribution, and wrong.
 
 ## Honest limitations
 

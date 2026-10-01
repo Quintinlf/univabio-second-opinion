@@ -13,6 +13,7 @@ Every figure in the README comes from this script. Run it to regenerate them:
 
 from __future__ import annotations
 
+import json
 import sys
 import warnings
 from pathlib import Path
@@ -24,6 +25,7 @@ warnings.filterwarnings("ignore")
 
 from second_opinion import SecondOpinion  # noqa: E402
 from second_opinion.data import CITATION, load  # noqa: E402
+from second_opinion.diagnostics import SPLIT_RESULTS  # noqa: E402
 from second_opinion.references import REFERENCES_BIBLIOGRAPHY  # noqa: E402
 from second_opinion.shift import evaluate_shift  # noqa: E402
 
@@ -83,6 +85,32 @@ def main() -> int:
     for row in evaluate_shift(model, model.X_test, model.y_test, kind="scale"):
         print(f"  {row['level']:<8.2f}  {row['withhold']:.1%}     "
               f"{row['novelty']:.1%}     {row['confident_error']:.1%}")
+
+    # Persist the per-seed spread so the app can show the distribution these
+    # headline means came from, instead of asking the reader to trust a number.
+    SPLIT_RESULTS.write_text(
+        json.dumps(
+            {
+                "n_seeds": N_SEEDS,
+                "target_coverage": float(1 - SecondOpinion().alpha),
+                "auc_uncalibrated": arr[:, 0].tolist(),
+                "auc": arr[:, 1].tolist(),
+                "brier_uncalibrated": arr[:, 2].tolist(),
+                "brier": arr[:, 3].tolist(),
+                "ece_uncalibrated": arr[:, 4].tolist(),
+                "ece": arr[:, 5].tolist(),
+                "coverage": arr[:, 6].tolist(),
+                "decisive": arr[:, 7].tolist(),
+                "ambiguous": arr[:, 8].tolist(),
+                "abstain": arr[:, 9].tolist(),
+                "novelty_flagged": arr[:, 10].tolist(),
+                "scrambled_flagged": float(flagged),
+            },
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
+    print(f"\nPer-seed results written to {SPLIT_RESULTS.name} (the app charts these).")
 
     print("\nReferences:")
     for ref in REFERENCES_BIBLIOGRAPHY:

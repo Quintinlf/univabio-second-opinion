@@ -20,6 +20,9 @@ from second_opinion.data import (
 )
 
 
+_ACTIONABLE_SEARCH_LIMIT = 12
+
+
 def archetypal_presets(model) -> dict[str, np.ndarray]:
     """Full 30-feature vectors, one per named profile."""
     data = model.data or load()
@@ -57,6 +60,16 @@ def _typical_of_class(model, X, y, label, scaler) -> np.ndarray:
 
 
 def _borderline_sample(model, X) -> np.ndarray:
+    """A real sample the model withholds on, preferring an actionable one.
+
+    Most in-distribution withholds have a single-slider move that makes the
+    set decisive; a minority do not and can only say "a human has to look".
+    Both are honest, but the preset is the one the README tells a reader to
+    try, so prefer the case that demonstrates the computed next step.
+    """
+    from second_opinion.counterfactual import conformal_counterfactual
+
+    withholds: list[np.ndarray] = []
     closest = None
     closest_gap = np.inf
     for x in X:
@@ -64,11 +77,19 @@ def _borderline_sample(model, X) -> np.ndarray:
         if a.novelty.is_outlier:
             continue
         if a.prediction_set.verdict in (ABSTAIN, AMBIGUOUS):
-            return x.copy()
+            withholds.append(x)
+            continue
         gap = abs(a.probability_malignant - 0.5)
         if gap < closest_gap:
             closest_gap = gap
             closest = x
+
+    for x in withholds[:_ACTIONABLE_SEARCH_LIMIT]:
+        cf = conformal_counterfactual(model, x)
+        if cf is not None and cf.feature is not None:
+            return x.copy()
+    if withholds:
+        return withholds[0].copy()
     if closest is not None:
         blended = _blend_until_withhold(model, closest)
         if blended is not None:

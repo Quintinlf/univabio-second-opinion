@@ -21,6 +21,7 @@ from second_opinion.data import (
     BASE_FEATURES, BENIGN, MALIGNANT, expand_base_features, feature_reference,
     load,
 )
+from second_opinion.diagnostics import format_probability
 from second_opinion.model import expected_calibration_error
 from second_opinion.ood import NoveltyDetector
 from second_opinion.presets import archetypal_presets
@@ -242,6 +243,60 @@ def test_expand_base_features_keeps_chosen_means_and_scales_the_rest():
     assert vec[names.index("mean texture")] == pytest.approx(chosen["mean texture"])
 
 
+def test_loading_a_real_sample_unchanged_reproduces_it_exactly():
+    """Regression: anchoring error/worst on the dataset median double-counted
+    a real sample's size, so selecting 'Typical malignant nucleus' in the UI
+    rebuilt a vector 4.2x beyond the novelty threshold and the app reported
+    'out of distribution' for a textbook malignant case."""
+    data = load()
+    reference = feature_reference(data)
+    malignant = data.X[data.y == MALIGNANT][0]
+    start = dict(zip(data.feature_names, malignant))
+    chosen = {n: start[n] for n in BASE_FEATURES}
+    vec = expand_base_features(
+        chosen, start=start, reference=reference, feature_names=data.feature_names
+    )
+    assert vec == pytest.approx(malignant)
+
+
+def test_real_sample_presets_are_not_flagged_as_novel_by_the_ui_rebuild(model):
+    """Every preset the UI can load must assess the same way the raw sample
+    does. A false 'out of distribution' on a typical nucleus is the opposite
+    of this project's claim."""
+    data = model.data
+    reference = feature_reference(data)
+    for name, vec in archetypal_presets(model).items():
+        start = dict(zip(data.feature_names, vec))
+        chosen = {n: start[n] for n in BASE_FEATURES}
+        rebuilt = expand_base_features(
+            chosen, start=start, reference=reference,
+            feature_names=data.feature_names,
+        )
+        raw_a, ui_a = model.assess(vec), model.assess(rebuilt)
+        assert ui_a.novelty.is_outlier == raw_a.novelty.is_outlier, name
+        assert ui_a.prediction_set.verdict == raw_a.prediction_set.verdict, name
+
+
+def test_no_sample_is_ever_reported_as_0_or_100_percent(model):
+    """Isotonic calibration returns exactly 1.0 for a pure calibration bin.
+    Reported as '100%' that claims certainty a 128-sample split cannot buy."""
+    floor = 1.0 / (2.0 * model.metrics.n_calibration)
+    for x in model.data.X:
+        p = model.assess(x).probability_malignant
+        assert floor <= p <= 1.0 - floor
+    assert "100%" not in model.assess(model.data.X[model.data.y == MALIGNANT][0]).headline()
+
+
+def test_a_tiny_probability_is_never_printed_as_certainty():
+    """Rounding 0.0004 to '0%' claims certainty the model does not have, which
+    is the overclaim this whole project is built to avoid."""
+    assert format_probability(0.0004) == "<0.1%"
+    assert format_probability(0.9997) == ">99.9%"
+    assert format_probability(0.0) == "0%"
+    assert format_probability(1.0) == "100%"
+    assert format_probability(0.705) == "70.5%"
+
+
 # ── counterfactuals ────────────────────────────────────────────────────────────
 
 def _in_distribution_withhold(model) -> np.ndarray:
@@ -298,6 +353,23 @@ def test_suggest_is_silent_on_a_trusted_decisive_sample(model):
             assert suggest(model, x) is None
             return
     pytest.fail("expected at least one trusted decisive sample")
+
+
+def test_borderline_preset_demonstrates_the_computed_next_step(model):
+    """README and UI both promise an abstain that names the move to make.
+
+    A minority of in-distribution withholds can only say "a human has to
+    look". That is honest, but the shipped preset is the one a reader is
+    told to try, so it must be the case that shows the next step.
+    """
+    x = archetypal_presets(model)["Borderline (withhold)"]
+    a = model.assess(x)
+    if a.novelty.is_outlier or a.prediction_set.verdict == DECISIVE:
+        pytest.skip("no in-distribution withhold on this split")
+    cf = suggest(model, x)
+    assert cf is not None and cf.kind == "conformal"
+    assert cf.feature is not None, "preset should name an actionable move"
+    assert cf.new_value is not None
 
 
 def test_presets_are_thirty_feature_vectors(model):
