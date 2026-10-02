@@ -1,187 +1,253 @@
-# Second Opinion — demo video script (v2)
+# Second Opinion — presentation script (v3)
 
-Rewritten after the 30 Sep walkthrough notes. Every jargon term you flagged is
-now explained **on screen**, so the narration can point at an explanation
-instead of apologising for one.
+Written after the 1 Oct run-through. That take was you reading the one-pager
+aloud and checking it against the repo — useful, but it is not a presentation,
+and you said so yourself about four minutes in.
 
-**Target 3:00.** UnivaBio sets no length limit; 3 minutes is the safe length
-for a judge watching dozens. Rows marked `[TRIM]` can be cut for a 2:00 version
-that still touches all five judging criteria.
+This version is built to be **spoken**, not read. Three rules it follows:
+
+1. **Nothing in it is a term you have to look up mid-sentence.** On the last
+   take you stopped on "split conformal prediction" and on "Mahalanobis" and
+   lost about ninety seconds. Every line below is sayable cold.
+2. **It opens with your lung-versus-breast example**, not with the dataset.
+   That was the clearest thing you said in twelve minutes and it is a better
+   hook than anything I had written.
+3. **It is three minutes.** At nine minutes on the last take you said "let's
+   finish this, I'm getting tired" — and it is audible. Short enough to deliver
+   with energy beats complete and flat.
+
+---
+
+## ⚠️ Read this before recording — three things you said that are wrong
+
+These are not criticisms of the project. They are things that would cost you
+marks if you said them on camera, and all three are easy to fix.
+
+**1. Mahalanobis is not a cell type, a disease, or a kind of cancer.**
+You said *"it looks like we're detecting Mahalanobis cells... Mahalanobis
+cancer, no idea what that even is."* It is a **way of measuring distance**,
+named after the statistician P.C. Mahalanobis. Say it like this:
+
+> "Ordinary distance asks whether one measurement is weird. Mahalanobis
+> distance asks whether the *combination* is weird — because in real cells,
+> area and radius move together. That is how it catches a sample where every
+> single number is in range but the shape is impossible."
+
+That is the whole concept and you now have it in one sentence. The glossary in
+the app says the same thing, with a warning label on it.
+
+**2. The out-of-distribution panel is not saying "99.61% sure it's
+impossible."** You read it that way at 9:47. It is saying the opposite: the
+classifier *wants* to say 99.61% malignant, and the system is **refusing to
+let that number count**. The percentage is the thing being withheld, not the
+confidence in the refusal. That distinction is the single most important point
+in your whole project — getting it backwards on camera would undercut
+everything. The app now labels that marker explicitly.
+
+**3. Calibration did not make the model "a little bit worse."**
+You said that at 7:52, reading the calibration curve. What actually happened:
+AUC dropped a hair (0.993 → 0.992) and **ECE improved** — meaning the
+percentages got more honest. Those are different things, which is the entire
+point of the Guo paper you cited. The honest line is:
+
+> "Calibration cost us almost nothing in ranking and bought us percentages
+> that mean what they say. That trade is the whole reason this project works."
+
+**One thing you did not know, and should:** you asked how split conformal
+prediction works. It is simpler than it sounds. You hold out a chunk of data
+the model never trains on. You look at how wrong the model's probabilities
+were on that chunk. That gives you a threshold. For a new sample, any label
+whose probability clears the threshold goes in the set — and if nothing clears
+it, the set is empty and the model abstains. The 90% guarantee comes from the
+held-out chunk, not from the model's own opinion of itself. **You do not need
+to say any of this in the video** — section 3 below says it in one line — but
+you should know it in case a judge asks.
 
 ---
 
 ## Before you record
 
 ```bash
+cd "C:\Users\Windows User\Documents\Work\univabio"
 python -m pytest tests -q          # expect: 32 passed
-python scripts/evaluate.py         # regenerates the 40-split charts
 streamlit run app.py
 ```
 
-Let the first load finish — it fits the model and builds the presets once
-(**15–20s**, with a `Running get_presets()` spinner). After that every preset
-switch is instant. Record at 1080p with the browser maximised.
+Kill any old Streamlit first or it will grab port 8501 and serve you a stale
+build. First load takes 15–20s behind a spinner — wait it out before recording.
 
-**Cue cards** are in `submission/cue_cards/`. Each section below names the one
-that should be on screen while you read it. They were captured from this build,
-so if your screen disagrees with a cue card, the script is wrong, not your app.
-
-> Regenerate them any time with:
-> ```bash
-> python scripts/capture_cue_cards.py --port 8501
-> ```
+Cue cards are in `submission/cue_cards/`, captured from this exact build.
 
 ---
 
-## 1 · The problem — 0:00–0:22
+# THE SCRIPT
+
+Total 3:00. Say it in your own words — these are the beats, not a teleprompter.
+
+---
+
+### 1 · The hook — 0:00–0:30
 **Cue card:** `01_hero.png`
 
-Open on the title and the warning banner. Hold one beat before speaking.
-
-> Ask almost any health-AI demo for a prediction and it will give you one.
-> Feed it a patient unlike anyone in its training data, or a mistyped
-> measurement, and it still gives you one — with the same confident
-> percentage attached. The number carries no signal about whether the model
-> had any business producing it. That is a real reason clinical machine
-> learning struggles to deploy: a model validated at one hospital degrades
-> at the next, and nothing in its output says so.
+> Hey, I'm Quintin. This is Second Opinion.
+>
+> Here is the problem I kept running into. Say you build a model on breast
+> tumour cells, and it works. Then someone feeds it a lung tumour cell.
+> Those are both tumour cells. Under a microscope they look similar. But they
+> are not the same thing, and a model trained on one has no business
+> answering about the other.
+>
+> Almost every health-AI demo will answer anyway. Same confident percentage,
+> no warning. And that is not a rare edge case — that is the normal way these
+> models fail when they leave the hospital they were built in.
+>
+> So I built one that knows when to shut up.
 
 ---
 
-## 2 · Three questions, not one — 0:22–0:45
+### 2 · What it is, and what it was trained on — 0:30–0:50
+**Cue card:** `01_hero.png` (point at the subtitle)
+
+> First line on the page is what it was trained on: breast fine-needle-aspirate
+> nuclear measurements, and nothing else. Not lung. Not images. I put that at
+> the top on purpose, because a model's training scope is the first thing you
+> should know about it and it is usually buried.
+>
+> And then the whole project is about what happens when you go outside it.
+
+---
+
+### 3 · Three questions, not one — 0:50–1:15
 **Cue card:** `02_glossary.png`
 
-Open the **Plain-English glossary**. Scroll it slowly while you speak — you do
-not need to read it aloud, the judge just needs to see it exists.
+Open the glossary and scroll it while you talk. You do not have to read it.
 
-> Second Opinion answers three separate questions about every sample. What is
-> the probability — a calibrated logistic regression. Is that probability
-> trustworthy *for this sample* — conformal prediction. And is this sample
-> even the kind of thing the model has seen — Mahalanobis novelty detection.
+> Instead of one number, it answers three separate questions.
 >
-> Every one of those terms is defined in the app itself, including what each
-> method cannot do on its own. Because each one is unreliable alone. Reporting
-> all three, and withholding the diagnosis when the last two say no, is the
-> project.
+> One — what is the probability. That is a logistic regression, calibrated so
+> the percentages mean what they say.
+>
+> Two — can that probability be trusted *for this specific sample*. That is
+> conformal prediction. It uses data the model never trained on to work out a
+> threshold, and if nothing clears that threshold, it returns an empty set and
+> refuses.
+>
+> Three — is this sample even the kind of thing I have seen before. That is a
+> distance measure that looks at whether the *combination* of measurements is
+> strange, not just whether any one of them is.
+>
+> Every one of those is defined in plain English inside the app, including what
+> each one can't do on its own. Because none of them is enough alone. Using all
+> three together, and letting the last two veto the first, is the project.
 
 ---
 
-## 3 · The normal case — 0:45–1:05
-**Cue card:** `04_malignant_decisive.png`
+### 4 · It works normally — 1:15–1:40
+**Cue cards:** `04_malignant_decisive.png` → `06b_where_this_sample_sits.png`
 
-Select **Typical malignant nucleus**. Let it land, then point at the three
-metrics.
+Select **Typical malignant nucleus**. Then scroll to "Where this sample sits".
 
-> On a sample that looks like its training data, it behaves like any good
-> classifier: a decisive call at ninety-nine-point-six percent, in
-> distribution, with the exact reason beside it. Those bars are the model's
-> own coefficients times this sample's standardised measurements. Not an
-> approximation of the model — the model.
+> On a normal sample it behaves like any good classifier. Decisive call,
+> 99.61% malignant, in distribution.
 >
-> And notice it does not say one hundred percent. The calibration set has a
-> hundred and twenty-eight samples; a hundred percent is a claim that sample
-> size cannot buy.
-
-**[TRIM]** — cut from "And notice" to reach 2:00.
+> And you can see what that number actually means — this chart is every
+> held-out sample, coloured by what it really turned out to be. Benign cases
+> live down on the left, malignant on the right, and the dashed line is our
+> sample sitting right in the middle of the malignant cluster. So the
+> percentage isn't just a number, it's a position among cases we know the
+> answers to.
+>
+> Also notice it does not say a hundred percent. It says 99.61. The honest
+> ceiling is set by how much calibration data I have — claiming certainty I
+> can't back up is exactly what I'm trying to avoid.
 
 ---
 
-## 4 · It abstains, and says what would change its mind — 1:05–1:40
+### 5 · It abstains, and tells you what to do — 1:40–2:05
 **Cue card:** `05_abstain_with_next_step.png`
 
-Select **Borderline (withhold)**. Zoom the "Why" line and the "What would make
-this decisive" line.
+Select **Borderline (withhold)**.
 
-> Here is a real patient from the dataset where it refuses. At the ninety
-> percent confidence level neither label is plausible, so the prediction set
-> is empty and the headline is an abstention, not a number.
+> Here is a real patient where it refuses. Neither label is plausible at 90%
+> confidence, so the set comes back empty and the headline is an abstention
+> instead of a number.
 >
-> And it does not stop at "I don't know." It computes the smallest single
-> measurement change that would make the call decisive: if mean concave
-> points rises thirty-two percent, this becomes a confident malignant. That
-> is something a clinician can act on — re-measure that one feature.
-
-> **Read the numbers off your own screen.** Verified on this build: conformal
-> **abstain**, novelty **0.27x**, next step *"if mean concave points rises by
-> 32% (0.0533 → 0.0704)"*. Exact figures shift slightly with your
-> scikit-learn build.
+> But it doesn't just say "I don't know" and leave you there. It works out the
+> smallest single change that would settle it — if this one measurement rises
+> about a third, it becomes a confident call. That is something you can
+> actually act on. Go re-measure that one thing.
 
 ---
 
-## 5 · It refuses nonsense it is maximally confident about — 1:40–2:15
+### 6 · The part that matters — 2:05–2:35
 **Cue card:** `06_out_of_distribution.png`
 
-Select **Implausible geometry**. **Frame it so the 99.61% probability and the
-red refusal are visible together** — that contrast is the whole video.
+Select **Implausible geometry**. Get the 99.61% and the red panel in frame
+together.
 
-> This is the case the project exists for. Mean area is at the dataset
-> maximum while radius and perimeter sit at their medians. Every value is
-> individually in range — a per-feature bounds check passes it without
-> comment — but the combination is geometrically impossible. A nucleus
-> cannot have that area at that radius.
+> And this is the one I actually care about.
 >
-> The underlying classifier is ninety-nine-point-six percent confident this
-> is malignant. Look at question one. And the system refuses to report it:
-> fifty-two times beyond the distance containing ninety-nine percent of the
-> training data. It names the measurement that looks like a typo, and offers
-> no diagnosis on the far side of that edit.
+> This sample has area at the dataset maximum, with radius and perimeter at
+> normal values. Every single number is inside the valid range — a simple
+> bounds check waves it straight through. But that combination is
+> geometrically impossible. A nucleus cannot have that area at that radius.
 >
-> That percentage is exactly what a conventional demo would have shown you,
-> with nothing attached to tell you not to believe it.
+> Now look at the probability. The classifier underneath is 99.61% confident
+> this is malignant. It is completely sure, and it is completely wrong to
+> even be answering.
+>
+> And the system refuses to report it. Fifty-two times beyond the range the
+> training data covers. It points at the exact measurement that looks like a
+> typo, and it gives no diagnosis on the other side of that.
+>
+> That 99.61% is exactly what a normal demo would have shown you — with
+> nothing attached to tell you not to believe it.
 
 ---
 
-## 6 · Why believe any of it — 2:15–2:45
-**Cue cards:** `07_calibration_charts.png` → `08_metrics_with_bands.png` →
-`09_forty_splits.png`
+### 7 · Why you should believe me — 2:35–2:50
+**Cue cards:** `08_metrics_with_bands.png` → `09_forty_splits.png`
 
-Scroll through the three in order. Roughly ten seconds each.
-
-> These are not numbers you have to take on faith. The calibration curve
-> shows what the model promised against what actually happened — the dashed
-> line is a perfectly honest model, and we sit on it. Beside it is what
-> calibration is physically doing to every held-out sample.
+> Quick on the evidence, because none of this is me asserting things.
 >
-> Every metric ships with what a good value looks like, so you are not left
-> guessing whether point-zero-three is good.
+> Every metric shows what a good value looks like, so you're not left guessing
+> whether 0.03 is good.
 >
-> And because coverage on a single split of a 569-sample dataset ranges from
-> eighty-six to ninety-nine percent, nothing here is quoted from one split.
-> That is the distribution over forty random splits, against the ninety
-> percent target. The mean is ninety-three-and-a-half.
+> And coverage on any single split of a 569-sample dataset swings between 86
+> and 99 percent depending purely on the random seed. So nothing here is quoted
+> from one split — that's the spread across forty, against the 90% target. It
+> averages 93.5.
 
 ---
 
-## 7 · How it fails — 2:45–3:00
+### 8 · Close — 2:50–3:00
 **Cue card:** `10_shift_charts.png`
 
-Open **What happens under measurement noise**.
-
-> Under progressive corruption, the withheld share climbs to one hundred
-> percent — while *confident and wrong* stays flat on the floor. It fails by
-> going quiet, not by guessing.
+> Last thing. Under increasing corruption, the amount it withholds climbs to
+> a hundred percent — while "confident and wrong" stays flat on the floor. It
+> fails by going quiet instead of guessing.
 >
-> To be clear about what is finished: this is a research prototype, not a
-> medical device. One institution, early nineties, pre-extracted
-> measurements rather than images. The conformal guarantee is marginal, not
-> per-subgroup, and that is the next thing to build.
+> This is a research prototype, not a medical device. One institution, early
+> nineties, and it works on measurements rather than images.
 >
-> A model that cannot say "I don't know" will hand a confident answer to a
-> case it has never seen. This one says it.
+> But a model that can't say "I don't know" will hand you a confident answer
+> about a case it has never seen. This one says it.
 
 ---
 
-## Recording notes
+## Delivery notes
 
-- **Never narrate over a spinner.** Switch preset, wait for it to land, speak.
-- Sections 3–5 are one continuous move through the dropdown. Keep the three
-  metric tiles in frame the whole time — they are the visual spine.
-- **Section 5 is the one judges remember.** If you rehearse one section,
-  rehearse that one, and check that `99.61%` and the red panel are legible in
-  the same frame.
-- Say "research prototype" before the halfway mark. The banner is already on
-  screen in section 1.
-- Do not claim accuracy numbers beyond section 6, and never call any output a
-  diagnosis.
-- The cue cards were captured in light theme. If you record in dark theme the
-  layout is identical — only the colours differ.
+- **Record section 6 first**, while you have the most energy. It is the one
+  judges remember. You can record sections out of order and cut them together.
+- If you fumble a line, stop and redo that section. Do not push through — the
+  last take has a lot of "um, let's see" and it reads as uncertainty about your
+  own work, which is the opposite of true here.
+- Say numbers as words: "ninety-nine point six one percent", not reading digits.
+- **Do not read the one-pager aloud.** You tried that and called it boring
+  yourself at 11:21. It is written to be skimmed on paper, not spoken.
+- Never call any output a diagnosis. Say "call", "assessment", or "the model
+  says".
+- You mentioned your NMR background. It is a genuine credibility point, but
+  careful: "nuclear" in this dataset means *cell nucleus*, not nuclear physics.
+  If you mention it, say "I work with measurement data rather than images, so
+  this kind of problem is familiar" and leave it there.

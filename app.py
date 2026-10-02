@@ -34,6 +34,7 @@ from second_opinion.diagnostics import (
     coverage_rows,
     format_probability,
     isotonic_mapping,
+    probability_context,
     reliability_curve,
     split_distribution,
 )
@@ -85,6 +86,11 @@ def get_shift_rows() -> dict[str, list[dict]]:
 
 
 @st.cache_data
+def get_probability_context() -> list[dict]:
+    return probability_context(get_model())
+
+
+@st.cache_data
 def get_calibration_data() -> dict:
     model = get_model()
     return {
@@ -103,6 +109,38 @@ def _apply_preset(name: str) -> None:
 
 
 # ── charts ─────────────────────────────────────────────────────────────────────
+
+def context_chart(rows: list[dict], here: float) -> alt.LayerChart:
+    """Where this sample's probability sits among the held-out population.
+
+    Answers "what does 99.6% actually mean" with a position rather than a
+    number: each tick is a real held-out sample at the probability the model
+    gave it, coloured by what it truly was.
+    """
+    df = pd.DataFrame(rows)
+    ticks = (
+        alt.Chart(df)
+        .mark_tick(thickness=2, size=26, opacity=0.5)
+        .encode(
+            x=alt.X("probability:Q", title="Probability the model gave",
+                    scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format="%")),
+            y=alt.Y("truth:N", title="", sort=["benign", "malignant"]),
+            color=alt.Color("truth:N", title="Actually was",
+                            scale=alt.Scale(domain=["benign", "malignant"],
+                                            range=["#54a24b", "#e45756"]),
+                            legend=None),
+            tooltip=[alt.Tooltip("probability:Q", format=".1%"),
+                     alt.Tooltip("truth:N", title="Truly")],
+        )
+    )
+    marker = (
+        alt.Chart(pd.DataFrame({"p": [here]}))
+        .mark_rule(color="#333", strokeWidth=3, strokeDash=[4, 3])
+        .encode(x="p:Q", tooltip=alt.Tooltip("p:Q", title="This sample",
+                                             format=".2%"))
+    )
+    return (ticks + marker).properties(height=120)
+
 
 def reliability_chart(rows: list[dict]) -> alt.LayerChart:
     """Stated probability vs what actually happened. Diagonal = honest."""
@@ -240,6 +278,14 @@ presets = get_presets()
 
 st.title("🩺 Second Opinion")
 st.markdown(
+    "### Trained on breast fine-needle-aspirate nuclear measurements — "
+    "and nothing else.\n"
+    "Not lung, not another tissue, not images. A model's training scope is the "
+    "first thing you need to know about it, so it is the first thing this page "
+    "says. The whole point of what follows is that this model can tell when a "
+    "sample is outside that scope, and refuse."
+)
+st.markdown(
     "**A diagnostic model that reports when it should not be trusted.**  \n"
     "Most health-AI demos return a confident percentage for any input you give "
     "them, including inputs unlike anything they were trained on. This one "
@@ -288,13 +334,15 @@ different patient population. This is the thing that breaks models at the second
 hospital. The *What happens under measurement noise* section below simulates it
 directly.
 
-**Mahalanobis distance** — a distance that accounts for how measurements
-normally move together. Plain distance asks "is this value unusual?"; Mahalanobis
-asks "is this *combination* unusual?" Area and radius are tightly linked in real
-nuclei, so a large area with a median radius is far away in Mahalanobis terms
-even though neither value is individually out of range. That is how the
-*Implausible geometry* preset gets caught. *Why not enough alone:* it tells you
-the sample is strange; it says nothing about whether it is malignant.
+**Mahalanobis distance** — ⚠️ *this is a way of measuring distance, not a type
+of cell, disease or tissue.* It is named after the statistician P.C.
+Mahalanobis. Ordinary distance asks "is this value unusual?"; Mahalanobis asks
+"is this **combination** unusual?", because it accounts for how measurements
+normally move together. Area and radius are tightly linked in real nuclei, so a
+large area with a median radius is far away in Mahalanobis terms even though
+neither value is out of range on its own. That is how the *Implausible geometry*
+preset gets caught. *Why not enough alone:* it tells you the sample is strange;
+it says nothing about whether it is malignant.
         """
     )
 
@@ -426,6 +474,37 @@ with left:
         st.caption(
             "The probability above is shown for transparency, not as a result. "
             "This is the case the project exists for."
+        )
+
+    st.markdown("###### Where this sample sits")
+    st.altair_chart(
+        context_chart(get_probability_context(),
+                      assessment.probability_malignant),
+        use_container_width=True,
+    )
+    context_caption = (
+        f"Each tick is one of the {model.metrics.n_test} held-out samples, "
+        "placed at the probability the model gave it and coloured by what it "
+        "actually turned out to be. The dashed line is the sample you are "
+        "looking at."
+    )
+    if assessment.trustworthy:
+        st.caption(
+            context_caption + " This is what the percentage means in practice "
+            "— not a number on its own, but a position among cases whose "
+            "answers are known."
+        )
+    else:
+        # Without this, the marker reads as "confidently malignant" on exactly
+        # the samples whose number is being withheld — the misreading the
+        # whole page exists to prevent.
+        st.caption(
+            context_caption + " **The dashed line is where the withheld "
+            "number would fall, not a result.** This sample is not comparable "
+            "to the ticks around it: those are real held-out samples, and this "
+            "one is outside what the model was trained on. The position is "
+            "shown so you can see what is being withheld, not so you can read "
+            "it anyway."
         )
 
 with right:

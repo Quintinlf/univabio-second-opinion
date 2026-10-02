@@ -69,6 +69,11 @@ def main() -> int:
             page.wait_for_timeout(3000)
             shot(name)
 
+        # "Where this sample sits" — the answer to "what does 99.6% mean".
+        page.get_by_text("Where this sample sits", exact=False).first.scroll_into_view_if_needed()
+        page.wait_for_timeout(1500)
+        shot("06b_where_this_sample_sits")
+
         # Evidence section: scroll so the two calibration charts fill the frame.
         page.get_by_text("Why you should believe any of this").first.scroll_into_view_if_needed()
         page.wait_for_timeout(1800)

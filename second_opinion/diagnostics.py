@@ -126,6 +126,25 @@ def isotonic_mapping(model) -> list[dict]:
     ]
 
 
+def probability_context(model) -> list[dict]:
+    """Every held-out sample's calibrated probability, with its true diagnosis.
+
+    A bare "99.6% malignant" is a number with nothing to sit against. Plotted
+    beside the held-out population it becomes a position: this sample sits
+    inside the malignant cluster, far from where the benign ones live. That is
+    what the percentage is actually claiming.
+    """
+    p = model.calibrated.predict_proba(model.X_test)[:, 1]
+    y = np.asarray(model.y_test, dtype=int)
+    return [
+        {
+            "probability": model.reportable_probability(float(pi)),
+            "truth": "malignant" if yi == 1 else "benign",
+        }
+        for pi, yi in zip(p, y)
+    ]
+
+
 def split_distribution() -> dict | None:
     """The 40-split results, if `scripts/evaluate.py` has written them.
 
