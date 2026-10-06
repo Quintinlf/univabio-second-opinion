@@ -89,6 +89,9 @@ Total 3:00. Say it in your own words — these are the beats, not a teleprompter
 ### 1 · The hook — 0:00–0:30
 **Cue card:** `01_hero.png`
 
+[![01_hero.png](cue_cards/thumbs/01_hero.jpg)](cue_cards/01_hero.png)
+
+
 > Hey, I'm Quintin. This is Second Opinion.
 >
 > Here is the problem I kept running into. Say you build a model on breast
@@ -108,6 +111,9 @@ Total 3:00. Say it in your own words — these are the beats, not a teleprompter
 ### 2 · What it is, and what it was trained on — 0:30–0:50
 **Cue card:** `01_hero.png` (point at the subtitle)
 
+[![01_hero.png](cue_cards/thumbs/01_hero.jpg)](cue_cards/01_hero.png)
+
+
 > First line on the page is what it was trained on: breast fine-needle-aspirate
 > nuclear measurements, and nothing else. Not lung. Not images. I put that at
 > the top on purpose, because a model's training scope is the first thing you
@@ -119,6 +125,9 @@ Total 3:00. Say it in your own words — these are the beats, not a teleprompter
 
 ### 3 · Three questions, not one — 0:50–1:15
 **Cue card:** `02_glossary.png`
+
+[![02_glossary.png](cue_cards/thumbs/02_glossary.jpg)](cue_cards/02_glossary.png)
+
 
 Open the glossary and scroll it while you talk. You do not have to read it.
 
@@ -145,6 +154,10 @@ Open the glossary and scroll it while you talk. You do not have to read it.
 ### 4 · It works normally — 1:15–1:40
 **Cue cards:** `04_malignant_decisive.png` → `06b_where_this_sample_sits.png`
 
+[![04_malignant_decisive.png](cue_cards/thumbs/04_malignant_decisive.jpg)](cue_cards/04_malignant_decisive.png)
+[![06b_where_this_sample_sits.png](cue_cards/thumbs/06b_where_this_sample_sits.jpg)](cue_cards/06b_where_this_sample_sits.png)
+
+
 Select **Typical malignant nucleus**. Then scroll to "Where this sample sits".
 
 > On a normal sample it behaves like any good classifier. Decisive call,
@@ -166,6 +179,9 @@ Select **Typical malignant nucleus**. Then scroll to "Where this sample sits".
 ### 5 · It abstains, and tells you what to do — 1:40–2:05
 **Cue card:** `05_abstain_with_next_step.png`
 
+[![05_abstain_with_next_step.png](cue_cards/thumbs/05_abstain_with_next_step.jpg)](cue_cards/05_abstain_with_next_step.png)
+
+
 Select **Borderline (withhold)**.
 
 > Here is a real patient where it refuses. Neither label is plausible at 90%
@@ -181,6 +197,9 @@ Select **Borderline (withhold)**.
 
 ### 6 · The part that matters — 2:05–2:35
 **Cue card:** `06_out_of_distribution.png`
+
+[![06_out_of_distribution.png](cue_cards/thumbs/06_out_of_distribution.jpg)](cue_cards/06_out_of_distribution.png)
+
 
 Select **Implausible geometry**. Get the 99.61% and the red panel in frame
 together.
@@ -208,6 +227,10 @@ together.
 ### 7 · Why you should believe me — 2:35–2:50
 **Cue cards:** `08_metrics_with_bands.png` → `09_forty_splits.png`
 
+[![08_metrics_with_bands.png](cue_cards/thumbs/08_metrics_with_bands.jpg)](cue_cards/08_metrics_with_bands.png)
+[![09_forty_splits.png](cue_cards/thumbs/09_forty_splits.jpg)](cue_cards/09_forty_splits.png)
+
+
 > Quick on the evidence, because none of this is me asserting things.
 >
 > Every metric shows what a good value looks like, so you're not left guessing
@@ -222,6 +245,9 @@ together.
 
 ### 8 · Close — 2:50–3:00
 **Cue card:** `10_shift_charts.png`
+
+[![10_shift_charts.png](cue_cards/thumbs/10_shift_charts.jpg)](cue_cards/10_shift_charts.png)
+
 
 > Last thing. Under increasing corruption, the amount it withholds climbs to
 > a hundred percent — while "confident and wrong" stays flat on the floor. It

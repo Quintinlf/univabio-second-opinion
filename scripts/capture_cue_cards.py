@@ -98,8 +98,27 @@ def main() -> int:
         shot("11_full_page", full=True)
         browser.close()
 
+    _write_thumbnails()
     print(f"\n{len(list(OUT.glob('*.png')))} cue cards in {OUT}")
     return 0
+
+
+def _write_thumbnails(width: int = 1100) -> None:
+    """Web-sized copies, for embedding in VIDEO_SCRIPT.md.
+
+    The full captures are 3000px wide. A dozen of those inline makes the script
+    slow to open on the same machine you are reading it from while recording,
+    so the markdown embeds these and links through to the originals.
+    """
+    from PIL import Image
+
+    thumbs = OUT / "thumbs"
+    thumbs.mkdir(exist_ok=True)
+    for f in sorted(OUT.glob("*.png")):
+        im = Image.open(f).convert("RGB")
+        im.thumbnail((width, width * 10), Image.LANCZOS)
+        im.save(thumbs / f"{f.stem}.jpg", "JPEG", quality=82, optimize=True)
+    print(f"  thumbnails -> {thumbs}")
 
 
 if __name__ == "__main__":
